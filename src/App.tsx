@@ -63,11 +63,10 @@ function App() {
           </Routes>
         </div>
       </Router>
-    </div>
 
       {/* Global Toast Notifications */}
       <ToastContainer toasts={toasts} onClose={removeToast} />
-    </>
+    </div>
   )
 }
 
