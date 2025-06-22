@@ -36,7 +36,7 @@ function App() {
   }
 
   return (
-    <div id="root">
+    <>
       <Router>
         <div className="min-h-screen bg-gray-50">
           <Routes>
@@ -66,7 +66,7 @@ function App() {
 
       {/* Global Toast Notifications */}
       <ToastContainer toasts={toasts} onClose={removeToast} />
-    </div>
+    
   )
 }
 
