@@ -33,13 +33,14 @@ export const useAuth = () => {
 
   const login = async (email: string, password: string) => {
     setAuthState(prev => ({ ...prev, loading: true, error: null }))
+    const trimmedEmail = email.trim(); // <--- ADD THIS LINE
 
     try {
       // Get admin by email (simplified auth for demo)
       const { data: admin, error } = await supabase
         .from('admins')
         .select('*')
-        .eq('email', email)
+        .eq('email', trimmedEmail)
         .eq('is_active', true)
         .single()
 
