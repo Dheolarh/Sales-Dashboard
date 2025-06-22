@@ -66,7 +66,7 @@ function App() {
 
       {/* Global Toast Notifications */}
       <ToastContainer toasts={toasts} onClose={removeToast} />
-    
+    </>
   )
 }
 
