@@ -14,7 +14,7 @@ const runTest = async () => {
   const { data, error } = await supabase
     .from('admins')
     .select('email, is_active')
-    .eq('email', 'admin@quickcart.com');
+    .eq('email', 'david.brown@quickcart.com');
 
   if (error) {
     console.error('Test Failed. An error occurred:', error);
@@ -25,9 +25,9 @@ const runTest = async () => {
   console.log(data);
 
   if (data && data.length > 0) {
-    console.log('\nSUCCESS: The admin@quickcart.com user was found!');
+    console.log('\nSUCCESS: The david.brown@quickcart.com user was found!');
   } else {
-    console.log('\nFAILURE: The admin@quickcart.com user was NOT found.');
+    console.log('\nFAILURE: The david.brown@quickcart.com user was NOT found.');
   }
 };
 
