@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import { dbService } from '../lib/supabase'
 import { formatCurrency, formatDateTime } from '../utils/format'
-import { useAuth } from '../hooks/useAuth'
+import { useAuthContext } from '../hooks/AuthContext'
 import type { Product, Transaction, ErrorLog } from '../lib/supabase'
 
 interface ChatMessage {
