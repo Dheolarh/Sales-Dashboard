@@ -23,7 +23,7 @@ export const LoginPage: React.FC = () => {
     try {
       await login(email, password)
     } catch (err) {
-      // Error is handled by useAuth hook
+      // Error is handled by the hook
     }
   }
 
