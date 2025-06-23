@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { Bell, User, LogOut, Globe, ExternalLink, Settings } from 'lucide-react'
-import { useAuthContext } from '../../hooks/AuthContext'
+import { useAuthContext } from '../../hooks/AuthContext' // <-- 1. CHANGE THIS IMPORT
 import { dbService } from '../../lib/supabase'
 import { NotificationCenter } from '../notifications/NotificationCenter'
 import { Badge } from '../ui/Badge'
 import type { Notification } from '../../lib/supabase'
 
 export const TopBar: React.FC = () => {
-  const { admin, logout } = useAuth()
+  const { admin, logout } = useAuthContext() // <-- 2. CHANGE THIS LINE
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [showNotifications, setShowNotifications] = useState(false)
   const [currentTime, setCurrentTime] = useState(new Date())
