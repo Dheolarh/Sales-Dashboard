@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
 import { detectLocation, getCurrentUTCTime, type LocationData } from '../utils/location'
-import { useAuth } from '../hooks/useAuth'
+import { useAuthContext } from '../hooks/AuthContext'
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('')
