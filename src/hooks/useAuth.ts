@@ -31,9 +31,41 @@ export const useAuth = () => {
     }
   }, [])
 
+  // vvvvv  DIAGNOSTIC CODE ADDED  vvvvv
+  useEffect(() => {
+    const testAdminQuery = async () => {
+      console.log("--- Running Diagnostic Query from useAuth ---");
+
+      // Test 1: The exact query from the login function
+      const { data: adminData, error: adminError } = await supabase
+        .from('admins')
+        .select('*')
+        .eq('email', 'admin@quickcart.com')
+        .eq('is_active', true);
+
+      console.log("Query 1 (with is_active):");
+      console.log("Data:", adminData);
+      console.log("Error:", adminError);
+
+      // Test 2: A simpler query without the 'is_active' check
+      const { data: simpleData, error: simpleError } = await supabase
+        .from('admins')
+        .select('email, is_active')
+        .eq('email', 'admin@quickcart.com');
+      
+      console.log("Query 2 (without is_active):");
+      console.log("Data:", simpleData);
+      console.log("Error:", simpleError);
+      console.log("---------------------------------");
+    };
+
+    testAdminQuery();
+  }, []);
+  // ^^^^^ END OF DIAGNOSTIC CODE ^^^^^
+
   const login = async (email: string, password: string) => {
     setAuthState(prev => ({ ...prev, loading: true, error: null }))
-    const trimmedEmail = email.trim(); // <--- ADD THIS LINE
+    const trimmedEmail = email.trim();
 
     try {
       // Get admin by email (simplified auth for demo)
