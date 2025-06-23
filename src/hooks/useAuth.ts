@@ -31,37 +31,53 @@ export const useAuth = () => {
     }
   }, [])
 
-  // vvvvv  DIAGNOSTIC CODE ADDED  vvvvv
+// vvvvv  REPLACE a`ll previous diagnostic code with this new block  vvvvv
   useEffect(() => {
-    const testAdminQuery = async () => {
-      console.log("--- Running Diagnostic Query from useAuth ---");
+    const ultimateTest = async () => {
+      const testEmail = `test.user.${Date.now()}@test.com`;
+      console.log(`--- Running Final Write/Read Test with user: ${testEmail} ---`);
 
-      // Test 1: The exact query from the login function
-      const { data: adminData, error: adminError } = await supabase
+      // Step 1: Clean up any previous test entry.
+      await supabase.from('admins').delete().eq('email', testEmail);
+
+      // Step 2: Try to INSERT a new admin from the app.
+      console.log("Attempting to INSERT the test user...");
+      const { error: insertError } = await supabase.from('admins').insert({
+        email: testEmail,
+        username: `testuser_${Date.now()}`,
+        full_name: 'Diagnostic Test User',
+        is_active: true
+      });
+      console.log("INSERT Error:", insertError);
+
+      if (insertError) {
+        console.error("Test HALTED: The INSERT operation failed. This is a critical error.", insertError);
+        return;
+      }
+
+      // Step 3: Try to SELECT the user we just inserted.
+      console.log("Attempting to SELECT the test user back...");
+      const { data: selectData, error: selectError } = await supabase
         .from('admins')
         .select('*')
-        .eq('email', 'admin@quickcart.com')
-        .eq('is_active', true);
+        .eq('email', testEmail);
+      console.log("SELECT Data:", selectData);
+      console.log("SELECT Error:", selectError);
 
-      console.log("Query 1 (with is_active):");
-      console.log("Data:", adminData);
-      console.log("Error:", adminError);
-
-      // Test 2: A simpler query without the 'is_active' check
-      const { data: simpleData, error: simpleError } = await supabase
-        .from('admins')
-        .select('email, is_active')
-        .eq('email', 'admin@quickcart.com');
-      
-      console.log("Query 2 (without is_active):");
-      console.log("Data:", simpleData);
-      console.log("Error:", simpleError);
-      console.log("---------------------------------");
+      // Step 4: As a control, try to read from a different table.
+      console.log("Attempting to read from 'companies' table...");
+      const { data: companiesData, error: companiesError } = await supabase
+        .from('companies')
+        .select('name')
+        .limit(3);
+      console.log("'companies' Data:", companiesData);
+      console.log("'companies' Error:", companiesError);
+      console.log("------------------ TEST COMPLETE ------------------");
     };
 
-    testAdminQuery();
+    ultimateTest();
   }, []);
-  // ^^^^^ END OF DIAGNOSTIC CODE ^^^^^
+  // ^^^^^ END OF THE NEW DIAGNOSTIC BLOCK ^^^^^
 
   const login = async (email: string, password: string) => {
     setAuthState(prev => ({ ...prev, loading: true, error: null }))
