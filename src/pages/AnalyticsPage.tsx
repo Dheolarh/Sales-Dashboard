@@ -15,7 +15,7 @@ import {
   Filter,
   RefreshCw,
   Target,
-  PieChart,
+  PieChart as PieChartIcon, // Renamed to avoid conflict
   Activity,
   Globe,
   Clock,
@@ -28,7 +28,8 @@ import {
   Line, 
   BarChart, 
   Bar, 
-  PieChart as RechartsPieChart, 
+  PieChart, 
+  Pie,      
   Cell, 
   XAxis, 
   YAxis, 
@@ -101,7 +102,6 @@ export const AnalyticsPage: React.FC = () => {
         dbService.getCompanies()
       ])
 
-      // Filter transactions by date range
       const filteredTransactions = transactions.filter(t => {
         const transactionDate = new Date(t.transaction_time).toISOString().split('T')[0]
         return transactionDate >= dateRange.start && transactionDate <= dateRange.end
@@ -122,24 +122,20 @@ export const AnalyticsPage: React.FC = () => {
     categories: Category[],
     companies: Company[]
   ): Promise<AnalyticsData> => {
-    // Revenue Analytics
     const totalRevenue = transactions.reduce((sum, t) => sum + t.total_amount, 0)
     const dailyRevenue = generateDailyRevenue(transactions)
     const revenueGrowth = calculateGrowth(dailyRevenue)
 
-    // Product Analytics
     const productSales = calculateProductSales(transactions, products)
     const topSellingProducts = productSales.slice(0, 10)
     const categoryPerformance = calculateCategoryPerformance(transactions, products, categories)
     const lowStockProducts = products.filter(p => p.current_stock < 50 && p.is_active).length
 
-    // Customer Analytics
     const totalOrders = transactions.length
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
     const topLocations = calculateTopLocations(transactions)
     const orderTrends = generateOrderTrends(transactions)
 
-    // Performance Metrics
     const totalCost = transactions.reduce((sum, t) => {
       const product = products.find(p => p.id === t.product_id)
       return sum + (product ? product.cost_price * t.quantity : 0)
@@ -147,58 +143,30 @@ export const AnalyticsPage: React.FC = () => {
     const profitMargin = totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0
 
     return {
-      revenue: {
-        total: totalRevenue,
-        growth: revenueGrowth,
-        trend: revenueGrowth > 5 ? 'up' : revenueGrowth < -5 ? 'down' : 'stable',
-        daily: dailyRevenue
-      },
-      products: {
-        total: products.length,
-        lowStock: lowStockProducts,
-        topSelling: topSellingProducts,
-        categoryPerformance
-      },
-      customers: {
-        totalOrders,
-        averageOrderValue,
-        topLocations,
-        orderTrends
-      },
-      performance: {
-        conversionRate: 85.5, // Simulated
-        returnRate: 2.3, // Simulated
-        profitMargin,
-        inventoryTurnover: 4.2 // Simulated
-      }
+      revenue: { total: totalRevenue, growth: revenueGrowth, trend: revenueGrowth > 5 ? 'up' : revenueGrowth < -5 ? 'down' : 'stable', daily: dailyRevenue },
+      products: { total: products.length, lowStock: lowStockProducts, topSelling: topSellingProducts, categoryPerformance },
+      customers: { totalOrders, averageOrderValue, topLocations, orderTrends },
+      performance: { conversionRate: 85.5, returnRate: 2.3, profitMargin, inventoryTurnover: 4.2 }
     }
   }
 
   const generateDailyRevenue = (transactions: Transaction[]) => {
     if (!transactions || transactions.length === 0) return [];
     const dailyData: Record<string, { revenue: number; transactions: number }> = {}
-    
     transactions.forEach(t => {
       const date = new Date(t.transaction_time).toISOString().split('T')[0]
-      if (!dailyData[date]) {
-        dailyData[date] = { revenue: 0, transactions: 0 }
-      }
+      if (!dailyData[date]) { dailyData[date] = { revenue: 0, transactions: 0 } }
       dailyData[date].revenue += t.total_amount
       dailyData[date].transactions += 1
     })
-
-    return Object.entries(dailyData)
-      .map(([date, data]) => ({ date, ...data }))
-      .sort((a, b) => a.date.localeCompare(b.date))
+    return Object.entries(dailyData).map(([date, data]) => ({ date, ...data })).sort((a, b) => a.date.localeCompare(b.date))
   }
 
   const calculateGrowth = (dailyData: Array<{ date: string; revenue: number }>) => {
     if (!dailyData || dailyData.length < 2) return 0
-    
     const midpoint = Math.floor(dailyData.length / 2)
     const firstHalf = dailyData.slice(0, midpoint).reduce((sum, d) => sum + d.revenue, 0)
     const secondHalf = dailyData.slice(midpoint).reduce((sum, d) => sum + d.revenue, 0)
-    
     if (firstHalf === 0) return secondHalf > 0 ? 100 : 0;
     return ((secondHalf - firstHalf) / firstHalf) * 100
   }
@@ -206,76 +174,53 @@ export const AnalyticsPage: React.FC = () => {
   const calculateProductSales = (transactions: Transaction[], products: Product[]) => {
     if (!transactions || transactions.length === 0) return [];
     const productSales: Record<string, { sales: number; revenue: number; product: Product }> = {}
-    
     transactions.forEach(t => {
       const product = products.find(p => p.id === t.product_id)
       if (product) {
-        if (!productSales[t.product_id]) {
-          productSales[t.product_id] = { sales: 0, revenue: 0, product }
-        }
+        if (!productSales[t.product_id]) { productSales[t.product_id] = { sales: 0, revenue: 0, product } }
         productSales[t.product_id].sales += t.quantity
         productSales[t.product_id].revenue += t.total_amount
       }
     })
-
-    return Object.values(productSales)
-      .sort((a, b) => b.revenue - a.revenue)
+    return Object.values(productSales).sort((a, b) => b.revenue - a.revenue)
   }
 
   const calculateCategoryPerformance = (transactions: Transaction[], products: Product[], categories: Category[]) => {
     if (!transactions || transactions.length === 0) return [];
     const categoryData: Record<string, { revenue: number; count: number }> = {}
-    
     transactions.forEach(t => {
       const product = products.find(p => p.id === t.product_id)
       if (product) {
         const category = categories.find(c => c.id === product.category_id)
         const categoryName = category?.name || 'Unknown'
-        
-        if (!categoryData[categoryName]) {
-          categoryData[categoryName] = { revenue: 0, count: 0 }
-        }
+        if (!categoryData[categoryName]) { categoryData[categoryName] = { revenue: 0, count: 0 } }
         categoryData[categoryName].revenue += t.total_amount
         categoryData[categoryName].count += 1
       }
     })
-
-    return Object.entries(categoryData)
-      .map(([category, data]) => ({ category, ...data }))
-      .sort((a, b) => b.revenue - a.revenue)
+    return Object.entries(categoryData).map(([category, data]) => ({ category, ...data })).sort((a, b) => b.revenue - a.revenue)
   }
 
   const calculateTopLocations = (transactions: Transaction[]) => {
     if (!transactions || transactions.length === 0) return [];
     const locationData: Record<string, { orders: number; revenue: number }> = {}
-    
     transactions.forEach(t => {
       const location = t.customer_location || 'Unknown'
-      if (!locationData[location]) {
-        locationData[location] = { orders: 0, revenue: 0 }
-      }
+      if (!locationData[location]) { locationData[location] = { orders: 0, revenue: 0 } }
       locationData[location].orders += 1
       locationData[location].revenue += t.total_amount
     })
-
-    return Object.entries(locationData)
-      .map(([location, data]) => ({ location, ...data }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10)
+    return Object.entries(locationData).map(([location, data]) => ({ location, ...data })).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
   }
 
   const generateOrderTrends = (transactions: Transaction[]) => {
     if (!transactions || transactions.length === 0) return [];
     const dailyOrders: Record<string, number> = {}
-    
     transactions.forEach(t => {
       const date = new Date(t.transaction_time).toISOString().split('T')[0]
       dailyOrders[date] = (dailyOrders[date] || 0) + 1
     })
-
-    return Object.entries(dailyOrders)
-      .map(([date, orders]) => ({ date, orders }))
-      .sort((a, b) => a.date.localeCompare(b.date))
+    return Object.entries(dailyOrders).map(([date, orders]) => ({ date, orders })).sort((a, b) => a.date.localeCompare(b.date))
   }
 
   const refreshAnalytics = async () => {
@@ -348,7 +293,7 @@ export const AnalyticsPage: React.FC = () => {
         <div className="text-center py-12">
           <BarChart3 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Analytics Data</h3>
-          <p className="text-gray-600">Unable to load analytics data. Please try again.</p>
+          <p className="text-gray-600">No data available for the selected period. Try a different date range.</p>
         </div>
       </div>
     )
@@ -573,14 +518,14 @@ export const AnalyticsPage: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <PieChart className="h-5 w-5 mr-2" />
+              <PieChartIcon className="h-5 w-5 mr-2" />
               Category Performance
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <RechartsPieChart>
+                <PieChart>
                   <Pie
                     data={analytics.products.categoryPerformance.slice(0, 6)}
                     dataKey="revenue"
@@ -595,7 +540,7 @@ export const AnalyticsPage: React.FC = () => {
                     ))}
                   </Pie>
                   <Tooltip formatter={(value) => formatCurrency(value as number)} />
-                </RechartsPieChart>
+                </PieChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
