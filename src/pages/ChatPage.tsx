@@ -72,7 +72,7 @@ const SAMPLE_QUESTIONS = [
 ]
 
 export const ChatPage: React.FC = () => {
-  const { admin } = useAuth()
+  const { admin } = useAuthContext()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
