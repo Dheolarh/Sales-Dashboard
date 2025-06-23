@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Bell, User, LogOut, Globe, ExternalLink, Settings } from 'lucide-react'
-import { useAuth } from '../../hooks/useAuth'
+import { useAuthContext } from '../../hooks/AuthContext'
 import { dbService } from '../../lib/supabase'
 import { NotificationCenter } from '../notifications/NotificationCenter'
 import { Badge } from '../ui/Badge'
