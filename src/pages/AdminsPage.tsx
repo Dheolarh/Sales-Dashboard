@@ -39,7 +39,7 @@ interface AdminFormData {
 }
 
 export const AdminsPage: React.FC = () => {
-  const { admin: currentAdmin } = useAuth()
+  const { admin: currentAdmin } = useAuthContext()
   const [admins, setAdmins] = useState<Admin[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
