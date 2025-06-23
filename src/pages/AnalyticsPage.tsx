@@ -175,6 +175,7 @@ export const AnalyticsPage: React.FC = () => {
   }
 
   const generateDailyRevenue = (transactions: Transaction[]) => {
+    if (!transactions || transactions.length === 0) return [];
     const dailyData: Record<string, { revenue: number; transactions: number }> = {}
     
     transactions.forEach(t => {
@@ -192,17 +193,18 @@ export const AnalyticsPage: React.FC = () => {
   }
 
   const calculateGrowth = (dailyData: Array<{ date: string; revenue: number }>) => {
-    if (dailyData.length < 2) return 0
+    if (!dailyData || dailyData.length < 2) return 0
     
     const midpoint = Math.floor(dailyData.length / 2)
     const firstHalf = dailyData.slice(0, midpoint).reduce((sum, d) => sum + d.revenue, 0)
     const secondHalf = dailyData.slice(midpoint).reduce((sum, d) => sum + d.revenue, 0)
     
-    if (firstHalf === 0) return 0
+    if (firstHalf === 0) return secondHalf > 0 ? 100 : 0;
     return ((secondHalf - firstHalf) / firstHalf) * 100
   }
 
   const calculateProductSales = (transactions: Transaction[], products: Product[]) => {
+    if (!transactions || transactions.length === 0) return [];
     const productSales: Record<string, { sales: number; revenue: number; product: Product }> = {}
     
     transactions.forEach(t => {
@@ -221,6 +223,7 @@ export const AnalyticsPage: React.FC = () => {
   }
 
   const calculateCategoryPerformance = (transactions: Transaction[], products: Product[], categories: Category[]) => {
+    if (!transactions || transactions.length === 0) return [];
     const categoryData: Record<string, { revenue: number; count: number }> = {}
     
     transactions.forEach(t => {
@@ -243,6 +246,7 @@ export const AnalyticsPage: React.FC = () => {
   }
 
   const calculateTopLocations = (transactions: Transaction[]) => {
+    if (!transactions || transactions.length === 0) return [];
     const locationData: Record<string, { orders: number; revenue: number }> = {}
     
     transactions.forEach(t => {
@@ -261,6 +265,7 @@ export const AnalyticsPage: React.FC = () => {
   }
 
   const generateOrderTrends = (transactions: Transaction[]) => {
+    if (!transactions || transactions.length === 0) return [];
     const dailyOrders: Record<string, number> = {}
     
     transactions.forEach(t => {
