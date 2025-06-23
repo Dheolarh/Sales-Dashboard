@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 // Manually copy your Supabase URL and Anon Key here.
 // This bypasses any .env file issues.
 const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace with your actual Supabase URL
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace with your actual Anon Key
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtbXBxd2J1bGZpd2RlcnVic2d3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1NzEwNDcsImV4cCI6MjA2NTE0NzA0N30.0jMK4UYMUdSvFIIFOGqx-iUBMIpLPw_Q0LHvsxfeXNg'; // Replace with your actual Anon Key
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
