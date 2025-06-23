@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { dbService, supabase } from '../lib/supabase'
 import { formatCurrency, formatDateTime } from '../utils/format'
-import { useAuth } from '../hooks/useAuth'
+import { useAuthContext } from '../hooks/AuthContext'
 import type { ErrorLog } from '../lib/supabase'
 
 export const ErrorLogsPage: React.FC = () => {
