@@ -4,13 +4,13 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
 import { detectLocation, getCurrentUTCTime, type LocationData } from '../utils/location'
-import { useAuthContext } from '../hooks/AuthContext' // 1. Change this import
+import { useAuthContext } from '../hooks/AuthContext' // 1. CHANGE THIS IMPORT
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [location, setLocation] = useState<LocationData | null>(null)
-  const { login, loading, error } = useAuthContext() // 2. Change this hook call
+  const { login, loading, error } = useAuthContext() // 2. CHANGE THIS HOOK CALL
 
   useEffect(() => {
     // Detect user location on page load
