@@ -19,7 +19,7 @@ import { useAuthContext } from '../hooks/AuthContext'
 import type { ErrorLog } from '../lib/supabase'
 
 export const ErrorLogsPage: React.FC = () => {
-  const { admin } = useAuth()
+  const { admin } = useAuthContext()
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
