@@ -21,7 +21,7 @@ import { ToastContainer } from './components/ui/Toast'
 import './index.css'
 
 function App() {
-  const { admin, loading } = useAuth()
+  const { admin, loading } = useAuthContext()
   const { toasts, removeToast } = useToast()
 
   if (loading) {
