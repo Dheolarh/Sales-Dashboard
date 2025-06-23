@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import { dbService, supabase } from '../lib/supabase'
 import { formatDateTime } from '../utils/format'
-import { useAuth } from '../hooks/useAuth'
+import { useAuthContext } from '../hooks/AuthContext'
 import type { Admin } from '../lib/supabase'
 
 interface AdminFormData {
