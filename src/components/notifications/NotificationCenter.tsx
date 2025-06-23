@@ -17,7 +17,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   isOpen,
   onClose
 }) => {
-  const { admin } = useAuth()
+  const { admin } = useAuthContext()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
 
