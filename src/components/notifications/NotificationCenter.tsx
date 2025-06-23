@@ -5,7 +5,7 @@ import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { dbService, supabase } from '../../lib/supabase'
 import { formatDateTime } from '../../utils/format'
-import { useAuth } from '../../hooks/useAuth'
+import { useAuthContext } from '../../hooks/AuthContext'
 import type { Notification } from '../../lib/supabase'
 
 interface NotificationCenterProps {
