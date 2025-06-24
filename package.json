@@ -11,7 +11,8 @@
     "deploy": "./node_modules/.bin/supabase functions deploy chat-ai"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.38.4",
+    "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.50.1",
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",
     "lucide-react": "^0.294.0",
