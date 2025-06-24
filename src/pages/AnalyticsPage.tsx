@@ -26,9 +26,10 @@ import {
 import { 
   LineChart, 
   Line, 
-  BarChart, 
+  BarChart as RechartsBarChart, 
   Bar, 
   PieChart as RechartsPieChart, 
+  Pie,
   Cell, 
   XAxis, 
   YAxis, 
