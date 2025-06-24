@@ -79,11 +79,9 @@ export const EcommerceCart: React.FC<EcommerceCartProps> = ({
 
       setOrderComplete(true)
       
-      // Clear cart after successful checkout
+      // After 3 seconds, reload the page
       setTimeout(() => {
-        cart.forEach(item => onUpdateQuantity(item.product.id, 0))
-        setOrderComplete(false)
-        onClose()
+        window.location.reload();
       }, 3000)
 
     } catch (error) {
@@ -120,7 +118,7 @@ export const EcommerceCart: React.FC<EcommerceCartProps> = ({
                   <CreditCard className="h-8 w-8 text-green-600" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Order Complete!</h3>
-                <p className="text-gray-600">Thank you for your purchase. Your order has been processed successfully.</p>
+                <p className="text-gray-600">Thank you for your purchase. This page will now reload.</p>
               </div>
             </div>
           ) : (
