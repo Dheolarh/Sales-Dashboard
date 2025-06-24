@@ -1,5 +1,3 @@
-// src/pages/ChatPage.tsx
-
 import React, { useState, useEffect, useRef } from 'react'
 import { Card, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -25,10 +23,10 @@ interface ChatMessage {
 }
 
 const SAMPLE_QUESTIONS = [
-  "What was our total revenue from the last 100 transactions?",
-  "Which products are running low on stock?",
-  "Show me the top 5 best-selling products by revenue.",
-  "Are there any critical errors I need to look at?",
+  "What are some strategies to increase average order value?",
+  "Give me three marketing ideas for our top-selling products.",
+  "How should I handle a stock discrepancy error?",
+  "What's a good way to analyze customer sales data?",
 ]
 
 export const ChatPage: React.FC = () => {
@@ -50,7 +48,7 @@ export const ChatPage: React.FC = () => {
     const welcomeMessage: ChatMessage = {
       id: 'welcome',
       type: 'assistant',
-      content: `Hello ${admin?.full_name || 'there'}! I'm Stella, your AI business assistant.\n\nHow can I help you today?`,
+      content: `Hello ${admin?.full_name || 'there'}! I'm Stella, your AI business assistant.\n\nAsk me anything for business advice or data analysis strategies.`,
       timestamp: new Date()
     }
     setMessages([welcomeMessage])
@@ -86,9 +84,9 @@ export const ChatPage: React.FC = () => {
     setMessages(prev => [...prev, typingMessage])
 
     try {
-      // Invoke the new Supabase Edge Function
-      const { data, error } = await supabase.functions.invoke('chat-ai', {
-        body: { query },
+      // Call the new database function
+      const { data, error } = await supabase.rpc('ask_gemini_stella', {
+        query_text: query
       })
 
       if (error) throw error
@@ -96,7 +94,7 @@ export const ChatPage: React.FC = () => {
       const aiResponse: ChatMessage = {
         id: Date.now().toString() + '-ai',
         type: 'assistant',
-        content: data.response,
+        content: data,
         timestamp: new Date(),
       }
 
@@ -213,9 +211,8 @@ export const ChatPage: React.FC = () => {
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  placeholder="Ask me anything about your business..."
+                  placeholder="Ask me anything for business advice..."
                   disabled={isLoading}
-                  className="pr-12"
                 />
               </div>
               <Button
