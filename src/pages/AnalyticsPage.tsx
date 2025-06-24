@@ -26,7 +26,7 @@ import {
 import { 
   LineChart, 
   Line, 
-  BarChart as RechartsBarChart, 
+  BarChart, 
   Bar, 
   PieChart as RechartsPieChart, 
   Pie,
