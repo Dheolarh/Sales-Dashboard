@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "deploy": "./node_modules/.bin/supabase functions deploy chat-ai"
+    "deploy": "supabase functions deploy ai-chat --no-verify-jwt"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
