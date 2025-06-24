@@ -234,7 +234,7 @@ export const dbService = {
       .select(`
         *,
         product:products(*),
-        admin:admins(*),
+        admin:admins!error_logs_admin_id_fkey(*),
         resolved_by_admin:admins!error_logs_resolved_by_fkey(*)
       `)
       .order('created_at', { ascending: false })
@@ -248,7 +248,7 @@ export const dbService = {
     if (error) throw error
     return data as ErrorLog[]
   },
-
+  
   // Notifications
   async getNotifications(adminId?: string) {
     let query = supabase
