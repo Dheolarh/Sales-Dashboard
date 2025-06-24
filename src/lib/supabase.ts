@@ -185,6 +185,73 @@ export const dbService = {
     return data as Product[]
   },
 
+  // New function to get a product by name (case-insensitive)
+  async getProductByName(name: string) {
+    const { data, error } = await supabase
+      .from('products')
+      .select(`*, company:companies(*), category:categories(*)`)
+      .ilike('name', `%${name}%`)
+      .single();
+    
+    if (error) {
+      // Don't throw if not found, just return null
+      if (error.code === 'PGRST116') return null; 
+      throw error;
+    }
+    return data as Product | null;
+  },
+
+  // New function to add a new product
+  async addProduct(productData: Omit<Product, 'id' | 'created_at' | 'updated_at'>) {
+    const { data, error } = await supabase
+      .from('products')
+      .insert(productData)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as Product;
+  },
+
+  // New function to update product stock
+  async updateProductStock(productId: string, newStock: number) {
+    const { data, error } = await supabase
+      .from('products')
+      .update({ current_stock: newStock, updated_at: new Date().toISOString() })
+      .eq('id', productId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as Product;
+  },
+  
+  // New function to delete a product by its ID
+  async deleteProduct(productId: string) {
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', productId);
+    
+    if (error) throw error;
+    return { success: true, message: `Product ${productId} deleted.` };
+  },
+
+  // New function to get sales data for a specific product
+  async getProductSales(productId: string) {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('quantity, total_amount')
+      .eq('product_id', productId);
+      
+    if (error) throw error;
+
+    const totalQuantity = data.reduce((sum, t) => sum + t.quantity, 0);
+    const totalRevenue = data.reduce((sum, t) => sum + t.total_amount, 0);
+
+    return { totalQuantity, totalRevenue };
+  }
+
   // Admins
   async getAdmins() {
     const { data, error } = await supabase
