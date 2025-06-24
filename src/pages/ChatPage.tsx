@@ -1,250 +1,226 @@
-// src/pages/ChatPage.tsx
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, CardContent } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Bot, User, Send, Sparkles, RefreshCw, Zap } from 'lucide-react';
+import { useAuthContext } from '../hooks/AuthContext';
+import { supabase } from '../lib/supabase'; // Using the Supabase client to call our Edge Function
 
-import React, { useState, useEffect, useRef } from 'react'
-import { Card, CardContent } from '../components/ui/Card'
-import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Input'
-import { 
-  MessageSquare, 
-  Send, 
-  Bot, 
-  User, 
-  Sparkles,
-  RefreshCw,
-  Copy
-} from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { useAuthContext } from '../hooks/AuthContext'
-
+// --- 1. INTERFACE DEFINITIONS ---
+// Defines the structure for each message in our chat history.
 interface ChatMessage {
-  id: string
-  type: 'user' | 'assistant'
-  content: string
-  timestamp: Date
-  isTyping?: boolean
+  id: string;
+  type: 'user' | 'assistant';
+  content: string;
+  isTyping?: boolean; // Optional flag to show the "thinking..." animation
 }
 
-const SAMPLE_QUESTIONS = [
-  "What are some strategies to increase average order value?",
-  "Give me three marketing ideas for our top-selling products.",
-  "How should I handle a stock discrepancy error?",
-  "What's a good way to analyze customer sales data?",
-]
+// --- 2. QUICK ACTIONS ---
+// A list of sample prompts to help the user get started.
+const QUICK_ACTIONS = [
+  "What was our total revenue last month?",
+  "How many units of 'Coca-Cola Classic 330ml' are in stock?",
+  "Update stock for 'Pringles Original 165g' to 500 units.",
+  "What were the total sales for 'Sony PlayStation 5 Console'?",
+];
 
+// --- 3. REACT COMPONENT ---
 export const ChatPage: React.FC = () => {
-  const { admin } = useAuthContext()
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [inputValue, setInputValue] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  // --- State Management ---
+  const { admin } = useAuthContext(); // Get the currently logged-in admin
+  const [messages, setMessages] = useState<ChatMessage[]>([]); // Holds the entire conversation history
+  const [inputValue, setInputValue] = useState(''); // The text currently in the input box
+  const [isLoading, setIsLoading] = useState(false); // Tracks when we are waiting for the AI to respond
+  const messagesEndRef = useRef<HTMLDivElement>(null); // A reference to the bottom of the chat, for auto-scrolling
 
+  // --- Effects ---
+  // This effect runs once to set up the initial welcome message from the AI.
   useEffect(() => {
-    initializeChat()
-  }, [])
+    setMessages([
+      {
+        id: 'welcome',
+        type: 'assistant',
+        content: `Hi ${admin?.full_name || 'there'}! I'm Stella. How can I help you manage the QuickCart store today?`,
+      },
+    ]);
+  }, [admin]);
 
+  // This effect runs every time the `messages` array changes, to keep the chat scrolled to the bottom.
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-  const initializeChat = () => {
-    const welcomeMessage: ChatMessage = {
-      id: 'welcome',
-      type: 'assistant',
-      content: `Hello ${admin?.full_name || 'there'}! I'm Stella, your AI business assistant.\n\nAsk me anything for business advice or data analysis strategies.`,
-      timestamp: new Date()
-    }
-    setMessages([welcomeMessage])
-  }
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
+  // --- 4. CORE FUNCTION: handleSendMessage ---
+  // This function is the heart of the chat component. It triggers when the user sends a message.
   const handleSendMessage = async (messageText?: string) => {
-    const query = messageText || inputValue.trim()
-    if (!query || isLoading) return
+    const query = (messageText || inputValue).trim();
+    if (!query || isLoading) return; // Don't send empty messages or while the AI is thinking
 
+    // Step A: Add the user's message to the UI immediately for a responsive feel.
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       type: 'user',
       content: query,
-      timestamp: new Date()
-    }
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue(''); // Clear the input box
+    setIsLoading(true); // Set loading state to true
 
-    setMessages(prev => [...prev, userMessage])
-    setInputValue('')
-    setIsLoading(true)
-
+    // Step B: Add a "typing" indicator to show the user the AI is working.
     const typingMessage: ChatMessage = {
       id: 'typing',
       type: 'assistant',
       content: '',
-      timestamp: new Date(),
-      isTyping: true
-    }
-    setMessages(prev => [...prev, typingMessage])
+      isTyping: true,
+    };
+    setMessages((prev) => [...prev, typingMessage]);
 
     try {
-      // Call the Edge Function
-      const { data, error } = await supabase.functions.invoke('chat-ai', {
+      // Step C: THE MOST IMPORTANT PART - Call our backend Edge Function.
+      // This replaces all the old, complicated if/else logic.
+      // We send the user's query to the 'ai-chat' function.
+      const { data, error } = await supabase.functions.invoke('ai-chat', {
         body: { query },
-      })
+      });
 
-      if (error) throw error
-      
-      const aiResponse: ChatMessage = {
+      if (error) throw new Error(error.message); // Handle any network or function errors
+
+      // Step D: Create the AI's response message object.
+      const assistantMessage: ChatMessage = {
         id: Date.now().toString() + '-ai',
         type: 'assistant',
-        content: data.response,
-        timestamp: new Date(),
-      }
+        content: data.response, // The plain-text response from Gemini
+      };
 
-      setMessages(prev => prev.filter(m => m.id !== 'typing').concat(aiResponse))
+      // Step E: Replace the "typing" indicator with the actual response from the AI.
+      setMessages((prev) => [...prev.filter((m) => m.id !== 'typing'), assistantMessage]);
 
     } catch (error) {
-      console.error('Failed to process query:', error)
+      console.error('Failed to get AI response:', error);
       const errorMessage: ChatMessage = {
-        id: Date.now().toString() + '-err',
+        id: Date.now().toString() + '-error',
         type: 'assistant',
-        content: "I am sorry, I encountered an error while invoking the AI function.",
-        timestamp: new Date()
-      }
-      setMessages(prev => prev.filter(m => m.id !== 'typing').concat(errorMessage))
+        content: "I'm sorry, I encountered an error. Please check the Edge Function logs and try again.",
+      };
+      setMessages((prev) => [...prev.filter((m) => m.id !== 'typing'), errorMessage]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false); // Reset loading state
     }
-  }
+  };
 
+  // --- Helper for sending message on Enter key press ---
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
+      e.preventDefault();
+      handleSendMessage();
     }
-  }
+  };
 
-  const copyMessage = (content: string) => {
-    navigator.clipboard.writeText(content)
-  }
-
+  // --- 5. JSX: RENDERING THE UI ---
+  // This is the structure of the page, using the components you provided.
   return (
     <div className="p-6 h-[calc(100vh-6rem)] flex flex-col">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <Bot className="h-8 w-8 text-quickcart-600 mr-3" />
-            Stella - AI Business Assistant
-          </h1>
-          <p className="text-gray-600 mt-1">Your intelligent business companion for data insights and analysis</p>
-        </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-600">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          <span>AI Assistant Online</span>
-        </div>
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+          <Bot className="h-8 w-8 text-quickcart-600 mr-3" />
+          Stella - AI Business Assistant
+        </h1>
+        <p className="text-gray-600 mt-1">
+          Ask me to check stock, analyze sales, or update products.
+        </p>
       </div>
 
+      {/* Main Chat Area */}
       <Card className="flex-1 flex flex-col">
         <CardContent className="flex-1 flex flex-col p-0">
+          {/* Message History */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex items-start gap-3 max-w-3xl ${
+                  message.type === 'user' ? 'justify-end ml-auto' : 'justify-start'
+                }`}
               >
-                <div className={`flex items-start space-x-3 max-w-3xl ${message.type === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                    message.type === 'user' 
-                      ? 'bg-quickcart-600 text-white' 
-                      : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+                {/* Assistant's Icon */}
+                {message.type === 'assistant' && (
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                )}
+                
+                {/* The Message Bubble */}
+                <div className={`p-4 rounded-lg ${
+                    message.type === 'user'
+                      ? 'bg-quickcart-600 text-white'
+                      : 'bg-gray-100 text-gray-900'
                   }`}>
-                    {message.type === 'user' ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                  </div>
-                  
-                  <div className={`flex-1 ${message.type === 'user' ? 'text-right' : ''}`}>
-                    <div className={`inline-block p-4 rounded-lg ${
-                      message.type === 'user'
-                        ? 'bg-quickcart-600 text-white'
-                        : 'bg-gray-100 text-gray-900'
-                    }`}>
-                      {message.isTyping ? (
-                        <div className="flex items-center space-x-1">
-                          <div className="flex space-x-1">
-                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                          </div>
-                          <span className="text-sm text-gray-600 ml-2">Stella is thinking...</span>
-                        </div>
-                      ) : (
-                        <div className="whitespace-pre-line">{message.content}</div>
-                      )}
+                  {message.isTyping ? (
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}/>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                     </div>
-                    
-                    {message.type === 'assistant' && !message.isTyping && (
-                      <div className="flex items-center space-x-2 mt-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => copyMessage(message.content)}
-                          className="text-xs"
-                        >
-                          <Copy className="h-3 w-3 mr-1" />
-                          Copy
-                        </Button>
-                        <span className="text-xs text-gray-500">
-                          {message.timestamp.toLocaleTimeString()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap">{message.content}</div>
+                  )}
                 </div>
+                
+                {/* User's Icon */}
+                {message.type === 'user' && (
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-quickcart-600 text-white">
+                    <User className="h-4 w-4" />
+                  </div>
+                )}
               </div>
             ))}
-            <div ref={messagesEndRef} />
+             <div ref={messagesEndRef} /> {/* This empty div is the target for auto-scrolling */}
           </div>
           
-          <div className="border-t border-gray-200 p-4">
+          {/* Quick Actions for when the chat is empty */}
+          {messages.length <= 1 && (
+            <div className="p-4 border-t">
+                 <div className="flex items-center gap-2 mb-2">
+                    <Zap className="h-4 w-4 text-yellow-500" />
+                    <h4 className="text-sm font-medium">Try asking:</h4>
+                 </div>
+                 <div className="flex flex-wrap gap-2">
+                    {QUICK_ACTIONS.map(q => (
+                        <Button key={q} size="sm" variant="outline" onClick={() => handleSendMessage(q)}>{q}</Button>
+                    ))}
+                 </div>
+            </div>
+          )}
+
+          {/* Input Area */}
+          <div className="border-t border-gray-200 p-4 bg-white">
             <div className="flex items-center space-x-3">
-              <div className="flex-1 relative">
-                <Input
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Ask me anything for business advice..."
-                  disabled={isLoading}
-                />
-              </div>
+              <Input
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask Stella anything..."
+                disabled={isLoading}
+                className="flex-1"
+                label="" // No label needed for the main chat input
+              />
               <Button
                 onClick={() => handleSendMessage()}
                 disabled={!inputValue.trim() || isLoading}
-                className="flex items-center"
+                className="w-24"
               >
                 {isLoading ? (
                   <RefreshCw className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Send className="h-4 w-4" />
+                  <><Send className="h-4 w-4 mr-2" /> Send</>
                 )}
               </Button>
-            </div>
-            
-            <div className="mt-3">
-              <p className="text-xs text-gray-500 mb-2">Try asking:</p>
-              <div className="flex flex-wrap gap-2">
-                {SAMPLE_QUESTIONS.map((question, index) => (
-                  <Button
-                    key={index}
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleSendMessage(question)}
-                    className="text-xs text-gray-600 hover:text-quickcart-600"
-                  >
-                    "{question}"
-                  </Button>
-                ))}
-              </div>
             </div>
           </div>
         </CardContent>
       </Card>
     </div>
-  )
-}
+  );
+};
