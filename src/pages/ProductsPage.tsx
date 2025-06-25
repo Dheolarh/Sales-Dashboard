@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { 
-  Package, 
-  Plus, 
-  Search, 
-  Filter, 
-  Edit, 
-  Trash2, 
+import {
+  Package,
+  Plus,
+  Search,
+  Filter,
+  Edit,
+  Trash2,
   PlusSquare,
   X,
   Save,
@@ -41,10 +41,10 @@ export const ProductsPage: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  
+
   const [showStockModal, setShowStockModal] = useState(false);
   const [selectedProductForStock, setSelectedProductForStock] = useState<Product | null>(null);
   const [stockToAdd, setStockToAdd] = useState<number>(0);
@@ -64,7 +64,15 @@ export const ProductsPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+    // *** NEW: Log page visit activity ***
+    if (admin) {
+      dbService.logActivity({
+        admin_id: admin.id,
+        action_type: 'PAGE_VISIT',
+        details: { page: '/products' }
+      });
+    }
+  }, [admin]);
 
   const loadData = async () => {
     setLoading(true);
@@ -74,7 +82,7 @@ export const ProductsPage: React.FC = () => {
         dbService.getCategories(),
         dbService.getCompanies()
       ]);
-      
+
       setProducts(productsData);
       setCategories(categoriesData);
       setCompanies(companiesData);
@@ -87,26 +95,50 @@ export const ProductsPage: React.FC = () => {
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description.toLowerCase().includes(searchTerm.toLowerCase());
+      product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !categoryFilter || product.category_id === categoryFilter;
     const matchesCompany = !companyFilter || product.company_id === companyFilter;
-    const matchesStatus = !statusFilter || 
-                         (statusFilter === 'active' && product.is_active) ||
-                         (statusFilter === 'inactive' && !product.is_active) ||
-                         (statusFilter === 'low_stock' && product.current_stock < 50);
-    
+    const matchesStatus = !statusFilter ||
+      (statusFilter === 'active' && product.is_active) ||
+      (statusFilter === 'inactive' && !product.is_active) ||
+      (statusFilter === 'low_stock' && product.current_stock < 50);
+
     return matchesSearch && matchesCategory && matchesCompany && matchesStatus;
   });
 
+  /* --- MODIFIED: handleSubmit now logs activity --- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!admin) {
+      alert("You must be logged in to perform this action.");
+      return;
+    }
+
     try {
+      let savedProduct: Product | null = null;
       if (editingProduct) {
-        await supabase.from('products').update({ ...formData, updated_at: new Date().toISOString() }).eq('id', editingProduct.id);
+        const { data, error } = await supabase.from('products').update({ ...formData, updated_at: new Date().toISOString() }).eq('id', editingProduct.id).select().single();
+        if (error) throw error;
+        savedProduct = data;
       } else {
-        await supabase.from('products').insert({ ...formData, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+        const { data, error } = await supabase.from('products').insert({ ...formData, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }).select().single();
+        if (error) throw error;
+        savedProduct = data;
       }
+
+      // *** NEW: Log this activity ***
+      if (savedProduct) {
+        dbService.logActivity({
+          admin_id: admin.id,
+          action_type: editingProduct ? 'UPDATE_PRODUCT' : 'CREATE_PRODUCT',
+          details: {
+            productId: savedProduct.id,
+            productName: savedProduct.name
+          }
+        });
+      }
+
       await loadData();
       resetForm();
     } catch (error) {
@@ -114,7 +146,7 @@ export const ProductsPage: React.FC = () => {
       alert('Failed to save product. Please try again.');
     }
   };
-  
+
   const handleStockUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProductForStock || !admin || !stockToAdd || stockToAdd <= 0) return;
@@ -127,6 +159,7 @@ export const ProductsPage: React.FC = () => {
         .update({ current_stock: new_stock, updated_at: new Date().toISOString() })
         .eq('id', selectedProductForStock.id);
 
+      // Log the inventory change
       await supabase.from('inventory_logs').insert({
         product_id: selectedProductForStock.id,
         admin_id: admin.id,
@@ -136,7 +169,19 @@ export const ProductsPage: React.FC = () => {
         new_stock: new_stock,
         reason: 'Manual stock addition by admin'
       });
-      
+
+      // *** NEW: Log this as a general activity ***
+      dbService.logActivity({
+        admin_id: admin.id,
+        action_type: 'UPDATE_STOCK',
+        details: {
+          productId: selectedProductForStock.id,
+          productName: selectedProductForStock.name,
+          quantityAdded: stockToAdd,
+          newStock: new_stock
+        }
+      });
+
       await loadData();
       closeStockModal();
     } catch (error) {
@@ -165,6 +210,19 @@ export const ProductsPage: React.FC = () => {
   const handleDelete = async (productId: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
     try {
+      // *** NEW: Log activity before deleting ***
+      const productToDelete = products.find(p => p.id === productId);
+      if (admin && productToDelete) {
+        dbService.logActivity({
+          admin_id: admin.id,
+          action_type: 'DELETE_PRODUCT',
+          details: {
+            productId: productToDelete.id,
+            productName: productToDelete.name
+          }
+        });
+      }
+
       await supabase.from('products').delete().eq('id', productId);
       await loadData();
     } catch (error) {
@@ -184,7 +242,7 @@ export const ProductsPage: React.FC = () => {
     setStockToAdd(0);
     setShowStockModal(true);
   };
-  
+
   const closeStockModal = () => {
     setShowStockModal(false);
     setSelectedProductForStock(null);
@@ -225,7 +283,6 @@ export const ProductsPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* --- THIS IS THE FILTERS CARD THAT WAS MISSING --- */}
       <Card>
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -319,8 +376,7 @@ export const ProductsPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-      
-      {/* --- THIS IS THE ADD/EDIT PRODUCT MODAL THAT WAS MISSING --- */}
+
       {showAddModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
@@ -335,37 +391,37 @@ export const ProductsPage: React.FC = () => {
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <Input label="Product Name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
-                    <Input label="SKU" value={formData.sku} onChange={(e) => setFormData({...formData, sku: e.target.value})} required />
+                    <Input label="Product Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+                    <Input label="SKU" value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value })} required />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-                      <select value={formData.company_id} onChange={(e) => setFormData({...formData, company_id: e.target.value})} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-quickcart-500" required>
+                      <select value={formData.company_id} onChange={(e) => setFormData({ ...formData, company_id: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-quickcart-500" required>
                         <option value="">Select Company</option>
                         {companies.map(company => (<option key={company.id} value={company.id}>{company.name}</option>))}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                      <select value={formData.category_id} onChange={(e) => setFormData({...formData, category_id: e.target.value})} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-quickcart-500" required>
+                      <select value={formData.category_id} onChange={(e) => setFormData({ ...formData, category_id: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-quickcart-500" required>
                         <option value="">Select Category</option>
                         {categories.map(category => (<option key={category.id} value={category.id}>{category.name}</option>))}
                       </select>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
-                    <Input label="Cost Price" type="number" step="0.01" value={formData.cost_price} onChange={(e) => setFormData({...formData, cost_price: parseFloat(e.target.value) || 0})} required />
-                    <Input label="Selling Price" type="number" step="0.01" value={formData.selling_price} onChange={(e) => setFormData({...formData, selling_price: parseFloat(e.target.value) || 0})} required />
-                    <Input label="Current Stock" type="number" value={formData.current_stock} onChange={(e) => setFormData({...formData, current_stock: parseInt(e.target.value) || 0})} required />
+                    <Input label="Cost Price" type="number" step="0.01" value={formData.cost_price} onChange={(e) => setFormData({ ...formData, cost_price: parseFloat(e.target.value) || 0 })} required />
+                    <Input label="Selling Price" type="number" step="0.01" value={formData.selling_price} onChange={(e) => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })} required />
+                    <Input label="Current Stock" type="number" value={formData.current_stock} onChange={(e) => setFormData({ ...formData, current_stock: parseInt(e.target.value) || 0 })} required />
                   </div>
-                  <Input label="Image URL" value={formData.image_url} onChange={(e) => setFormData({...formData, image_url: e.target.value})} placeholder="https://example.com/image.jpg" />
+                  <Input label="Image URL" value={formData.image_url} onChange={(e) => setFormData({ ...formData, image_url: e.target.value })} placeholder="https://example.com/image.jpg" />
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-quickcart-500" rows={3} placeholder="Product description..." />
+                    <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-quickcart-500" rows={3} placeholder="Product description..." />
                   </div>
                   <div className="flex items-center">
-                    <input type="checkbox" id="is_active" checked={formData.is_active} onChange={(e) => setFormData({...formData, is_active: e.target.checked})} className="rounded border-gray-300 text-quickcart-600 focus:ring-quickcart-500" />
+                    <input type="checkbox" id="is_active" checked={formData.is_active} onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })} className="rounded border-gray-300 text-quickcart-600 focus:ring-quickcart-500" />
                     <label htmlFor="is_active" className="ml-2 text-sm text-gray-700">Product is active</label>
                   </div>
                   <div className="flex justify-end space-x-3 pt-4 border-t">
@@ -379,7 +435,6 @@ export const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* New Add Stock Modal */}
       {showStockModal && selectedProductForStock && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">

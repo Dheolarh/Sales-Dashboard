@@ -139,6 +139,16 @@ export interface Notification {
   related_error?: ErrorLog
 }
 
+/* --- NEW: Interface for the new activity log table --- */
+export interface ActivityLog {
+  id: string
+  admin_id: string
+  session_id?: string
+  action_type: string
+  details?: Record<string, any>
+  created_at: string
+}
+
 // Database service functions
 export const dbService = {
   // Companies
@@ -147,7 +157,7 @@ export const dbService = {
       .from('companies')
       .select('*')
       .order('name')
-    
+
     if (error) throw error
     return data as Company[]
   },
@@ -158,7 +168,7 @@ export const dbService = {
       .from('categories')
       .select('*')
       .order('name')
-    
+
     if (error) throw error
     return data as Category[]
   },
@@ -174,13 +184,13 @@ export const dbService = {
       `)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
-    
+
     if (limit) {
       query = query.limit(limit)
     }
-    
+
     const { data, error } = await query
-    
+
     if (error) throw error
     return data as Product[]
   },
@@ -192,7 +202,7 @@ export const dbService = {
       .select('*')
       .eq('is_active', true)
       .order('full_name')
-    
+
     if (error) throw error
     return data as Admin[]
   },
@@ -207,7 +217,7 @@ export const dbService = {
       `)
       .order('transaction_time', { ascending: false })
       .limit(limit)
-    
+
     if (error) throw error
     return data as Transaction[]
   },
@@ -222,7 +232,7 @@ export const dbService = {
       `)
       .order('login_time', { ascending: false })
       .limit(limit)
-    
+
     if (error) throw error
     return data as AccessLog[]
   },
@@ -238,17 +248,17 @@ export const dbService = {
         resolved_by_admin:admins!error_logs_resolved_by_fkey(*)
       `)
       .order('created_at', { ascending: false })
-    
+
     if (resolved !== undefined) {
       query = query.eq('resolved', resolved)
     }
-    
+
     const { data, error } = await query
-    
+
     if (error) throw error
     return data as ErrorLog[]
   },
-  
+
   // Notifications
   async getNotifications(adminId?: string) {
     let query = supabase
@@ -259,13 +269,13 @@ export const dbService = {
         related_error:error_logs(*)
       `)
       .order('created_at', { ascending: false })
-    
+
     if (adminId) {
       query = query.or(`admin_id.eq.${adminId},admin_id.is.null`)
     }
-    
+
     const { data, error } = await query
-    
+
     if (error) throw error
     return data as Notification[]
   },
@@ -290,10 +300,8 @@ export const dbService = {
       activeAdmins: activeAdmins || 0,
       unresolvedErrors: unresolvedErrors || 0
     }
-  }, // <-- THIS COMMA WAS MISSING
+  },
 
-  // --- NEW FUNCTIONS FOR AI CHAT ---
-  
   // New function to get a product by name (case-insensitive)
   async getProductByName(name: string) {
     const { data, error } = await supabase
@@ -301,10 +309,9 @@ export const dbService = {
       .select(`*, company:companies(*), category:categories(*)`)
       .ilike('name', `%${name}%`)
       .single();
-    
+
     if (error) {
-      // Don't throw if not found, just return null
-      if (error.code === 'PGRST116') return null; 
+      if (error.code === 'PGRST116') return null;
       throw error;
     }
     return data as Product | null;
@@ -334,30 +341,85 @@ export const dbService = {
     if (error) throw error;
     return data as Product;
   },
-  
+
   // New function to delete a product by its ID
   async deleteProduct(productId: string) {
     const { error } = await supabase
       .from('products')
       .delete()
       .eq('id', productId);
-    
+
     if (error) throw error;
     return { success: true, message: `Product ${productId} deleted.` };
   },
 
-  // New function to get sales data for a specific product
-  async getProductSales(productId: string) {
-    const { data, error } = await supabase
+  /* --- MODIFIED: getProductSales now accepts an optional date range --- */
+  async getProductSales(productId: string, startDate?: string, endDate?: string) {
+    let query = supabase
       .from('transactions')
       .select('quantity, total_amount')
       .eq('product_id', productId);
-      
+
+    if (startDate) {
+      query = query.gte('transaction_time', startDate);
+    }
+    if (endDate) {
+      query = query.lte('transaction_time', endDate);
+    }
+
+    const { data, error } = await query;
+
     if (error) throw error;
 
     const totalQuantity = data.reduce((sum, t) => sum + t.quantity, 0);
     const totalRevenue = data.reduce((sum, t) => sum + t.total_amount, 0);
 
     return { totalQuantity, totalRevenue };
+  },
+
+  /* --- NEW: Function to log user activity --- */
+  logActivity(activity: {
+    admin_id: string;
+    action_type: string;
+    details?: Record<string, any>;
+    session_id?: string;
+  }) {
+    // This is a "fire and forget" operation, so we don't wait for the result
+    supabase.from('activity_logs').insert({ ...activity }).then(({ error }) => {
+      if (error) {
+        console.error("Failed to log activity:", error);
+      }
+    });
+  },
+
+  /* --- NEW: Function for the AI to get admin activity --- */
+  async getAdminActivity(adminName: string, limit = 10) {
+    // First, find the admin by name
+    const { data: admin, error: adminError } = await supabase
+      .from('admins')
+      .select('id, full_name')
+      .ilike('full_name', `%${adminName}%`)
+      .single();
+
+    if (adminError || !admin) {
+      throw new Error(`Admin '${adminName}' not found.`);
+    }
+
+    // Then, fetch their activity
+    const { data: activities, error: activityError } = await supabase
+      .from('activity_logs')
+      .select('action_type, details, created_at')
+      .eq('admin_id', admin.id)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (activityError) {
+      throw activityError;
+    }
+
+    return {
+      adminName: admin.full_name,
+      recentActivity: activities,
+    };
   }
 }
