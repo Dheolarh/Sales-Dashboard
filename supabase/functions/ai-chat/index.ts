@@ -293,13 +293,20 @@ async function listCompanies(supabase) {
 
 // --- Main Request Handler ---
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
+  // Wrap the entire function in a try...catch block for robust error handling
   try {
+    if (req.method === 'OPTIONS') {
+      return new Response('ok', { headers: corsHeaders });
+    }
+
     const { query, history, user } = await req.json();
-    const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_ANON_KEY'));
+
+    // **FIX**: Use the Service Role Key to bypass RLS for server-side logic.
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL'),
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') // Use service role key
+    );
+
     const genAI = new GoogleGenerativeAI(Deno.env.get('GEMINI_API_KEY'));
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
 
@@ -404,6 +411,6 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('CRITICAL ERROR in function execution:', error);
-    return new Response(JSON.stringify({ error: error.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 });
+    return new Response(JSON.stringify({ error: `An unexpected error occurred: ${error.message}` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 });
   }
 });
