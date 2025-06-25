@@ -4,6 +4,55 @@ import { corsHeaders } from '../_shared/cors.ts';
 
 // --- Tool Implementations ---
 
+// --- Product & Inventory Management ---
+
+async function getProductDetails(supabase, productName) {
+  console.log(`Tool called: getProductDetails for ${productName}`);
+  const { data: product, error } = await supabase
+    .from('products')
+    .select('name, sku, description, selling_price, current_stock, company:companies(name), category:categories(name)')
+    .ilike('name', `%${productName}%`)
+    .single();
+  if (error || !product) {
+    return { error: `Product '${productName}' not found.` };
+  }
+  return product;
+}
+
+async function listProducts(supabase, page = 1, limit = 10, category, company) {
+  console.log(`Tool called: listProducts with page=${page}, limit=${limit}, category=${category}, company=${company}`);
+  let query = supabase.from('products').select('name, current_stock, selling_price', { count: 'exact' });
+
+  if (category) {
+    const { data: cat } = await supabase.from('categories').select('id').ilike('name', `%${category}%`).single();
+    if (cat) query = query.eq('category_id', cat.id);
+  }
+  if (company) {
+    const { data: comp } = await supabase.from('companies').select('id').ilike('name', `%${company}%`).single();
+    if (comp) query = query.eq('company_id', comp.id);
+  }
+
+  const { data, error, count } = await query.range((page - 1) * limit, page * limit - 1);
+  if (error) {
+    return { error: 'Failed to retrieve products.' };
+  }
+  return { totalProducts: count, showing: data.length, products: data };
+}
+
+
+async function findProducts(supabase, searchTerm) {
+  console.log(`Tool called: findProducts for ${searchTerm}`);
+  const { data, error } = await supabase
+    .from('products')
+    .select('name, sku, current_stock')
+    .ilike('name', `%${searchTerm}%`)
+    .limit(10);
+  if (error) {
+    return { error: `Failed to find products.` };
+  }
+  return { productCount: data.length, products: data };
+}
+
 async function getProductStock(supabase, productName) {
   console.log(`Tool called: getProductStock for ${productName}`);
   const { data: product, error } = await supabase
@@ -16,6 +65,106 @@ async function getProductStock(supabase, productName) {
   }
   return product;
 }
+
+async function updateStock(supabase, productName, newStock) {
+  console.log(`Tool called: updateStock for ${productName} to ${newStock}`);
+  const { data: product, error: productError } = await supabase.from('products').select('id, name').ilike('name', `%${productName}%`).single();
+  if (productError || !product) {
+    return { error: `Product '${productName}' not found.` };
+  }
+  const { data, error } = await supabase.from('products').update({ current_stock: newStock }).eq('id', product.id).select().single();
+  if (error) {
+    return { error: 'Failed to update stock.' };
+  }
+  return { status: 'success', productName: data.name, newStock: data.current_stock };
+}
+
+async function getOutOfStockProducts(supabase) {
+  console.log(`Tool called: getOutOfStockProducts`);
+  const { data, error } = await supabase
+    .from('products')
+    .select('name, sku, company:companies(name)')
+    .eq('current_stock', 0);
+  if (error) {
+    return { error: 'Failed to retrieve out of stock products.' };
+  }
+  return { productCount: data.length, products: data };
+}
+
+async function getRecentDeletions(supabase, timeRange) {
+  console.log(`Tool called: getRecentDeletions for ${timeRange}`);
+  let startDate = new Date();
+  if (timeRange === 'today') {
+    startDate.setHours(0, 0, 0, 0);
+  } else if (timeRange === 'last 7 days') {
+    startDate.setDate(startDate.getDate() - 7);
+  }
+
+  const { data, error } = await supabase
+    .from('activity_logs')
+    .select('details, created_at, admin:admins(full_name)')
+    .eq('action_type', 'DELETE_PRODUCT')
+    .gte('created_at', startDate.toISOString());
+
+  if (error) {
+    return { error: 'Failed to retrieve deletion logs.' };
+  }
+  return { deletionCount: data.length, deletions: data };
+}
+
+async function listAvailableProducts(supabase, limit = 10) {
+  console.log(`Tool called: listAvailableProducts`);
+  const { data, error } = await supabase
+    .from('products')
+    .select('name, sku, current_stock')
+    .gt('current_stock', 0)
+    .order('current_stock', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return { error: 'Failed to retrieve product list.' };
+  }
+  const { count } = await supabase.from('products').select('*', { count: 'exact', head: true }).gt('current_stock', 0);
+  return { totalAvailable: count, showing: data.length, products: data };
+}
+
+
+// --- Sales & Revenue Analysis ---
+
+async function getSalesSummary(supabase, startDate, endDate) {
+  console.log(`Tool called: getSalesSummary from ${startDate} to ${endDate}`);
+  let query = supabase.from('transactions').select('total_amount, quantity');
+
+  if (startDate) query = query.gte('transaction_time', startDate);
+  if (endDate) query = query.lte('transaction_time', endDate);
+
+  const { data, error } = await query;
+  if (error) return { error: "Failed to retrieve sales data." };
+
+  const totalRevenue = data.reduce((sum, t) => sum + t.total_amount, 0);
+  const totalItemsSold = data.reduce((sum, t) => sum + t.quantity, 0);
+  const totalTransactions = data.length;
+
+  return { totalRevenue, totalItemsSold, totalTransactions };
+}
+
+async function getBestSellingProducts(supabase, limit = 5, timePeriod = 'last 30 days') {
+  console.log(`Tool called: getBestSellingProducts for ${timePeriod}`);
+  let startDate = new Date();
+  startDate.setDate(startDate.getDate() - 30); // Default to last 30 days
+  if (timePeriod === 'last 7 days') {
+    startDate.setDate(startDate.getDate() - 7);
+  }
+
+  const { data, error } = await supabase.rpc('get_best_selling_products', {
+    start_date: startDate.toISOString(),
+    limit_count: limit
+  });
+
+  if (error) return { error: 'Failed to get best selling products.' };
+  return { bestSellers: data };
+}
+
 
 async function getProductSales(supabase, productName, startDate, endDate) {
   console.log(`Tool called: getProductSales for ${productName} from ${startDate} to ${endDate}`);
@@ -38,29 +187,20 @@ async function getProductSales(supabase, productName, startDate, endDate) {
   return { productName: product.name, totalQuantity, totalRevenue };
 }
 
-async function addProduct(supabase, productName, stock, selling_price) {
-  console.log(`Tool called: addProduct ${productName}`);
-  return { status: 'error', message: 'Adding products requires SKU, Company, and Category. Please use the "Add Product" form in the Products page.' };
+// --- Transaction & Order Management ---
+
+async function lookupTransaction(supabase, transactionId) {
+  console.log(`Tool called: lookupTransaction for ${transactionId}`);
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*, product:products(name)')
+    .eq('transaction_id', transactionId)
+    .single();
+  if (error) return { error: `Transaction ${transactionId} not found.` };
+  return data;
 }
 
-async function updateStock(supabase, productName, newStock) {
-  console.log(`Tool called: updateStock for ${productName} to ${newStock}`);
-  const { data: product, error: productError } = await supabase.from('products').select('id, name').ilike('name', `%${productName}%`).single();
-  if (productError || !product) {
-    return { error: `Product '${productName}' not found.` };
-  }
-  const { data, error } = await supabase.from('products').update({ current_stock: newStock }).eq('id', product.id).select().single();
-  if (error) {
-    return { error: 'Failed to update stock.' };
-  }
-  return { status: 'success', productName: data.name, newStock: data.current_stock };
-}
-
-async function getOverallStats(supabase, timeRange) {
-  console.log(`Tool called: getOverallStats for ${timeRange}`);
-  // This is a simplified example.
-  return { status: "success", totalRevenue: 15203.50, totalTransactions: 432, timeRange: timeRange };
-}
+// --- User & Access Management ---
 
 async function getUserActivity(supabase, adminName) {
   console.log(`Tool called: getUserActivity for ${adminName}`);
@@ -75,18 +215,52 @@ async function getUserActivity(supabase, adminName) {
   return { adminName: admin.full_name, recentActivity: activities };
 }
 
-async function listProductsByCategory(supabase, categoryName) {
-  console.log(`Tool called: listProductsByCategory for ${categoryName}`);
-  const { data: category, error: catError } = await supabase.from('categories').select('id, name').ilike('name', `%${categoryName}%`).single();
-  if (catError || !category) {
-    return { error: `Category '${categoryName}' not found.` };
-  }
-  const { data: products, error: prodError } = await supabase.from('products').select('name, sku, current_stock').eq('category_id', category.id);
-  if (prodError) {
-    return { error: 'Failed to retrieve products for that category.' };
-  }
-  // Return only top 10 to keep response concise, but mention the total count.
-  return { categoryName: category.name, productCount: products.length, products: products.slice(0, 10) };
+async function listAdmins(supabase) {
+  console.log(`Tool called: listAdmins`);
+  const { data, error } = await supabase.from('admins').select('full_name, role, email, last_login');
+  if (error) return { error: 'Failed to retrieve admins.' };
+  return { adminCount: data.length, admins: data };
+}
+
+// --- AI, Health & Monitoring ---
+async function getUnresolvedAnomalies(supabase) {
+  console.log(`Tool called: getUnresolvedAnomalies`);
+  const { data, error } = await supabase
+    .from('error_logs')
+    .select('id, error_type, description, severity, created_at')
+    .eq('resolved', false)
+    .order('created_at', { ascending: false });
+  if (error) return { error: 'Failed to retrieve anomalies.' };
+  return { anomalyCount: data.length, anomalies: data };
+}
+
+async function getSystemHealthSummary(supabase) {
+  console.log(`Tool called: getSystemHealthSummary`);
+  // This is a mock function. In a real scenario, this would check database connections, API latency, etc.
+  const { count } = await supabase.from('error_logs').select('*', { count: 'exact', head: true }).eq('resolved', false);
+  return {
+    status: "All Systems Operational",
+    databaseConnection: "Healthy",
+    apiLatency: "120ms",
+    unresolvedAnomalies: count || 0,
+    uptime: "99.98%"
+  };
+}
+
+
+// --- Category & Company Management ---
+async function listCategories(supabase) {
+  console.log(`Tool called: listCategories`);
+  const { data, error } = await supabase.from('categories').select('name, description');
+  if (error) return { error: 'Failed to retrieve categories.' };
+  return { categoryCount: data.length, categories: data };
+}
+
+async function listCompanies(supabase) {
+  console.log(`Tool called: listCompanies`);
+  const { data, error } = await supabase.from('companies').select('name, country');
+  if (error) return { error: 'Failed to retrieve companies.' };
+  return { companyCount: data.length, companies: data };
 }
 
 
@@ -104,22 +278,40 @@ Deno.serve(async (req) => {
 
     const dbSchemaContext = `
       - products: Product catalog. Columns: id, name, sku, company_id, category_id, cost_price, selling_price, current_stock, is_active.
-      - transactions: Sales records. Columns: product_id, quantity, total_amount, customer_location, transaction_time.
+      - transactions: Sales records. Columns: transaction_id, product_id, quantity, total_amount, customer_location, transaction_time.
       - admins: Administrator users. Columns: id, full_name, role, location.
-      - access_logs: Admin login events. Columns: admin_id, login_time, success, location, ip_address.
-      - inventory_logs: Audit trail for stock changes. Columns: product_id, admin_id, change_type ('sale', 'restock', 'adjustment'), quantity_change, reason.
-      - activity_logs: Detailed log of user actions. Columns: admin_id, session_id, action_type, details (jsonb), timestamp.
+      - activity_logs: Detailed log of user actions. Columns: admin_id, action_type, details (jsonb), created_at.
+      - error_logs: AI-detected anomalies and system errors.
+      - companies: Supplier/manufacturer information.
+      - categories: Product categories.
     `;
 
     const tools = [{
       functionDeclarations: [
+        // Product & Inventory
+        { name: 'getProductDetails', description: 'Get detailed information about a single product, including its company and category.', parameters: { type: 'OBJECT', properties: { productName: { type: 'STRING' } }, required: ['productName'] } },
+        { name: 'listProducts', description: 'Lists products in the inventory, with optional filters for category and company.', parameters: { type: 'OBJECT', properties: { page: { type: 'NUMBER' }, limit: { type: 'NUMBER' }, category: { type: 'STRING' }, company: { type: 'STRING' } } } },
+        { name: 'findProducts', description: 'Searches for products by a search term.', parameters: { type: 'OBJECT', properties: { searchTerm: { type: 'STRING' } }, required: ['searchTerm'] } },
         { name: 'getProductStock', description: 'Get the current stock quantity of a specific product.', parameters: { type: 'OBJECT', properties: { productName: { type: 'STRING' } }, required: ['productName'] } },
-        { name: 'getProductSales', description: 'Get the total units sold and revenue for a product, optionally in a date range.', parameters: { type: 'OBJECT', properties: { productName: { type: 'STRING' }, startDate: { type: 'STRING' }, endDate: { type: 'STRING' } }, required: ['productName'] } },
         { name: 'updateStock', description: 'Update the stock quantity for an existing product.', parameters: { type: 'OBJECT', properties: { productName: { type: 'STRING' }, newStock: { type: 'NUMBER' } }, required: ['productName', 'newStock'] } },
+        { name: 'getOutOfStockProducts', description: 'Get a list of all products that are currently out of stock (stock is 0).', parameters: { type: 'OBJECT', properties: {} } },
+        { name: 'getRecentDeletions', description: 'Find out which products were deleted and by whom within a given timeframe.', parameters: { type: 'OBJECT', properties: { timeRange: { type: 'STRING', enum: ["today", "last 7 days"] } }, required: ['timeRange'] } },
+        { name: 'listAvailableProducts', description: 'Get a list of products that are currently in stock.', parameters: { type: 'OBJECT', properties: { limit: { type: 'NUMBER' } } } },
+        // Sales & Revenue
+        { name: 'getSalesSummary', description: 'Calculates total revenue, items sold, and number of transactions within a date range.', parameters: { type: 'OBJECT', properties: { startDate: { type: 'STRING', description: 'ISO 8601 format' }, endDate: { type: 'STRING', description: 'ISO 8601 format' } } } },
+        { name: 'getBestSellingProducts', description: 'Finds the top-selling products based on revenue in a given period.', parameters: { type: 'OBJECT', properties: { limit: { type: 'NUMBER' }, timePeriod: { type: 'STRING', enum: ["last 7 days", "last 30 days"] } } } },
+        { name: 'getProductSales', description: 'Get the total units sold and revenue for a product, optionally in a date range.', parameters: { type: 'OBJECT', properties: { productName: { type: 'STRING' }, startDate: { type: 'STRING' }, endDate: { type: 'STRING' } }, required: ['productName'] } },
+        // Transaction & Order
+        { name: 'lookupTransaction', description: 'Looks up a specific transaction by its unique ID.', parameters: { type: 'OBJECT', properties: { transactionId: { type: 'STRING' } }, required: ['transactionId'] } },
+        // User & Access
         { name: 'getUserActivity', description: "Get recent dashboard actions for a specific administrator.", parameters: { type: 'OBJECT', properties: { adminName: { type: 'STRING' } }, required: ['adminName'] } },
-        { name: 'listProductsByCategory', description: 'Get a list of all products belonging to a specific category.', parameters: { type: 'OBJECT', properties: { categoryName: { type: 'STRING' } }, required: ['categoryName'] } },
-        { name: 'addProduct', description: 'Add a new product to the inventory.', parameters: { type: 'OBJECT', properties: { productName: { type: 'STRING' }, stock: { type: 'NUMBER' }, selling_price: { type: 'NUMBER' } }, required: ['productName', 'stock', 'selling_price'] } },
-        { name: 'getOverallStats', description: 'Get overall statistics like total revenue and transactions for a time range like "today", "last month", or "all time".', parameters: { type: 'OBJECT', properties: { timeRange: { type: 'STRING', enum: ["today", "last month", "all time"] } }, required: ['timeRange'] } },
+        { name: 'listAdmins', description: 'Get a list of all administrator users in the system.', parameters: { type: 'OBJECT', properties: {} } },
+        // AI, Health & Monitoring
+        { name: 'getUnresolvedAnomalies', description: 'Retrieves a list of all system-detected anomalies that have not been resolved yet.', parameters: { type: 'OBJECT', properties: {} } },
+        { name: 'getSystemHealthSummary', description: 'Provides a mock summary of the system health.', parameters: { type: 'OBJECT', properties: {} } },
+        // Category & Company
+        { name: 'listCategories', description: 'Retrieves a list of all product categories.', parameters: { type: 'OBJECT', properties: {} } },
+        { name: 'listCompanies', description: 'Retrieves a list of all companies/suppliers.', parameters: { type: 'OBJECT', properties: {} } },
       ]
     }];
 
@@ -131,13 +323,16 @@ Deno.serve(async (req) => {
     const userName = user?.name || 'the current user';
     const system_prompt = `You are Stella, a highly intelligent AI business assistant for the QuickCart dashboard. Your purpose is to provide precise information and perform actions by using your available tools. You are speaking with ${userName}.
     **Core Directives:**
-    1. **Analyze Intent:** Do not rely on keywords. Deeply analyze the user's prompt to understand their true intent. Use semantic understanding.
-    2. **Tool-First Approach:** Your primary method of answering is by using tools. Do not guess.
-    3. **Deductive Reasoning:** If a user's query is ambiguous or a tool fails, deduce the user's goal and ask a clarifying question.
-    4. **Concise & Professional:** Be direct. Do not use conversational filler. Do not address the user by their name in every response.
-    5. **Schema Awareness:** You have profound knowledge of the database schema: ${dbSchemaContext}
-    6. **Context:** The current date is ${new Date().toDateString()}. The user's location is Nigeria.`;
+    1. **Tool-First Approach:** Your primary method of answering is by using your functions. If the user's query can be answered with a tool, use it. Do not guess.
+    2. **Fallback to General Conversation:** If, and only if, a user's query CANNOT be answered using one of your available tools, you may answer it as a helpful, general-purpose conversational AI. For any and all questions about the dashboard, sales, products, or other business data, you MUST use your tools.
+    3. **Analyze Intent Deeply:** Do not rely on keywords. Understand the user's true intent. Use semantic understanding to choose the right tool and parameters.
+    4. **Use Conversation History:** You have access to the recent chat history. Use this context to understand follow-up questions. For example, if a user asks "how many?" after you've talked about a product, understand they are asking about that product.
+    5. **Clarify and Guide:** If a prompt is ambiguous (e.g., "list products"), or a tool fails because of bad input, ask a clarifying question. Guide the user toward a query you can answer.
+    6. **Concise & Professional:** Be direct and to the point. Do not use conversational filler, unless engaged in general conversation (see directive #2).
+    7. **Schema Awareness:** You have profound knowledge of this database schema: ${dbSchemaContext}
+    8. **Context:** The current date is ${new Date().toDateString()}. The user's location is Nigeria.`;
 
+    // Use the system prompt only for the very first message in a conversation.
     const messageToSend = (history && history.length > 0)
       ? query
       : `${system_prompt}\n\nUser query: "${query}"`;
@@ -146,17 +341,34 @@ Deno.serve(async (req) => {
     const call = result.response.functionCalls()?.[0];
 
     if (call) {
+      const toolMap = {
+        getProductDetails,
+        listProducts,
+        findProducts,
+        getProductStock,
+        updateStock,
+        getOutOfStockProducts,
+        getRecentDeletions,
+        listAvailableProducts,
+        getSalesSummary,
+        getBestSellingProducts,
+        getProductSales,
+        lookupTransaction,
+        getUserActivity,
+        listAdmins,
+        getUnresolvedAnomalies,
+        getSystemHealthSummary,
+        listCategories,
+        listCompanies,
+      };
+
       let toolResult;
-      switch (call.name) {
-        case "getProductStock": toolResult = await getProductStock(supabase, call.args.productName); break;
-        case "getProductSales": toolResult = await getProductSales(supabase, call.args.productName, call.args.startDate, call.args.endDate); break;
-        case "updateStock": toolResult = await updateStock(supabase, call.args.productName, call.args.newStock); break;
-        case "getUserActivity": toolResult = await getUserActivity(supabase, call.args.adminName); break;
-        case "listProductsByCategory": toolResult = await listProductsByCategory(supabase, call.args.categoryName); break;
-        case "addProduct": toolResult = await addProduct(supabase, call.args.productName, call.args.stock, call.args.selling_price); break;
-        case "getOverallStats": toolResult = await getOverallStats(supabase, call.args.timeRange); break;
-        default: toolResult = { error: "Unknown function call" };
+      if (toolMap[call.name]) {
+        toolResult = await toolMap[call.name](supabase, ...Object.values(call.args));
+      } else {
+        toolResult = { error: "Unknown function call" };
       }
+
       const finalResult = await chat.sendMessage([{ functionResponse: { name: call.name, response: toolResult } }]);
       return new Response(JSON.stringify({ response: finalResult.response.text() }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
