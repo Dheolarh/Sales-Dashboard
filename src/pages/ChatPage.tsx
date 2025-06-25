@@ -59,11 +59,23 @@ export const ChatPage: React.FC = () => {
     const query = (messageText || inputValue).trim();
     if (!query || isLoading) return;
 
+    // The user's message is added to state immediately
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       type: 'user',
       content: query,
     };
+
+    // Create the history to be sent to the backend
+    // We map our internal state to the format Gemini expects: { role, parts }
+    // We also exclude the very last "typing" message if it exists
+    const historyForAPI = messages
+      .filter(m => !m.isTyping)
+      .map(m => ({
+        role: m.type === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }]
+      }));
+
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
@@ -77,10 +89,11 @@ export const ChatPage: React.FC = () => {
     setMessages((prev) => [...prev, typingMessage]);
 
     try {
-      // *** MODIFIED: Pass the admin object in the body ***
+      // *** MODIFIED: Pass the history and the new query in the body ***
       const { data, error } = await supabase.functions.invoke('ai-chat', {
         body: {
-          query,
+          query, // The new message
+          history: historyForAPI, // The history of the conversation so far
           user: admin ? { id: admin.id, name: admin.full_name } : null
         },
       });
@@ -150,8 +163,8 @@ export const ChatPage: React.FC = () => {
 
                 {/* The Message Bubble */}
                 <div className={`p-4 rounded-lg ${message.type === 'user'
-                    ? 'bg-quickcart-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                  ? 'bg-quickcart-600 text-white'
+                  : 'bg-gray-100 text-gray-900'
                   }`}>
                   {message.isTyping ? (
                     <div className="flex items-center space-x-1">

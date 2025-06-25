@@ -377,6 +377,34 @@ export const dbService = {
     return { totalQuantity, totalRevenue };
   },
 
+  async getProductsByCategory(categoryName: string) {
+    // First, find the category by name to get its ID
+    const { data: category, error: categoryError } = await supabase
+      .from('categories')
+      .select('id, name')
+      .ilike('name', `%${categoryName}%`)
+      .single();
+
+    if (categoryError || !category) {
+      throw new Error(`Category matching '${categoryName}' not found.`);
+    }
+
+    // Then, fetch all products in that category
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select('name, sku, selling_price, current_stock')
+      .eq('category_id', category.id);
+
+    if (productsError) {
+      throw productsError;
+    }
+
+    return {
+      categoryName: category.name,
+      products: products || []
+    };
+  },
+
   /* --- NEW: Function to log user activity --- */
   logActivity(activity: {
     admin_id: string;
