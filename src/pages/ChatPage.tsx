@@ -53,21 +53,21 @@ export const ChatPage: React.FC = () => {
 
   // --- 4. CORE FUNCTION: handleSendMessage ---
   // This function is the heart of the chat component. It triggers when the user sends a message.
+  // Replace the existing handleSendMessage function in pages/ChatPage.tsx
+
   const handleSendMessage = async (messageText?: string) => {
     const query = (messageText || inputValue).trim();
-    if (!query || isLoading) return; // Don't send empty messages or while the AI is thinking
+    if (!query || isLoading) return;
 
-    // Step A: Add the user's message to the UI immediately for a responsive feel.
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       type: 'user',
       content: query,
     };
     setMessages((prev) => [...prev, userMessage]);
-    setInputValue(''); // Clear the input box
-    setIsLoading(true); // Set loading state to true
+    setInputValue('');
+    setIsLoading(true);
 
-    // Step B: Add a "typing" indicator to show the user the AI is working.
     const typingMessage: ChatMessage = {
       id: 'typing',
       type: 'assistant',
@@ -77,35 +77,33 @@ export const ChatPage: React.FC = () => {
     setMessages((prev) => [...prev, typingMessage]);
 
     try {
-      // Step C: THE MOST IMPORTANT PART - Call our backend Edge Function.
-      // This replaces all the old, complicated if/else logic.
-      // We send the user's query to the 'ai-chat' function.
+      // *** MODIFIED: Pass the admin object in the body ***
       const { data, error } = await supabase.functions.invoke('ai-chat', {
-        body: { query },
+        body: {
+          query,
+          user: admin ? { id: admin.id, name: admin.full_name } : null
+        },
       });
 
-      if (error) throw new Error(error.message); // Handle any network or function errors
+      if (error) throw new Error(error.message);
 
-      // Step D: Create the AI's response message object.
       const assistantMessage: ChatMessage = {
         id: Date.now().toString() + '-ai',
         type: 'assistant',
-        content: data.response, // The plain-text response from Gemini
+        content: data.response,
       };
 
-      // Step E: Replace the "typing" indicator with the actual response from the AI.
       setMessages((prev) => [...prev.filter((m) => m.id !== 'typing'), assistantMessage]);
-
     } catch (error) {
       console.error('Failed to get AI response:', error);
       const errorMessage: ChatMessage = {
         id: Date.now().toString() + '-error',
         type: 'assistant',
-        content: "I'm sorry, I encountered an error. Please check the Edge Function logs and try again.",
+        content: "I'm sorry, I encountered an error. Please try again.",
       };
       setMessages((prev) => [...prev.filter((m) => m.id !== 'typing'), errorMessage]);
     } finally {
-      setIsLoading(false); // Reset loading state
+      setIsLoading(false);
     }
   };
 
@@ -140,9 +138,8 @@ export const ChatPage: React.FC = () => {
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex items-start gap-3 max-w-3xl ${
-                  message.type === 'user' ? 'justify-end ml-auto' : 'justify-start'
-                }`}
+                className={`flex items-start gap-3 max-w-3xl ${message.type === 'user' ? 'justify-end ml-auto' : 'justify-start'
+                  }`}
               >
                 {/* Assistant's Icon */}
                 {message.type === 'assistant' && (
@@ -150,24 +147,23 @@ export const ChatPage: React.FC = () => {
                     <Sparkles className="h-4 w-4" />
                   </div>
                 )}
-                
+
                 {/* The Message Bubble */}
-                <div className={`p-4 rounded-lg ${
-                    message.type === 'user'
-                      ? 'bg-quickcart-600 text-white'
-                      : 'bg-gray-100 text-gray-900'
+                <div className={`p-4 rounded-lg ${message.type === 'user'
+                    ? 'bg-quickcart-600 text-white'
+                    : 'bg-gray-100 text-gray-900'
                   }`}>
                   {message.isTyping ? (
                     <div className="flex items-center space-x-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}/>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                     </div>
                   ) : (
                     <div className="whitespace-pre-wrap">{message.content}</div>
                   )}
                 </div>
-                
+
                 {/* User's Icon */}
                 {message.type === 'user' && (
                   <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-quickcart-600 text-white">
@@ -176,21 +172,21 @@ export const ChatPage: React.FC = () => {
                 )}
               </div>
             ))}
-             <div ref={messagesEndRef} /> {/* This empty div is the target for auto-scrolling */}
+            <div ref={messagesEndRef} /> {/* This empty div is the target for auto-scrolling */}
           </div>
-          
+
           {/* Quick Actions for when the chat is empty */}
           {messages.length <= 1 && (
             <div className="p-4 border-t">
-                 <div className="flex items-center gap-2 mb-2">
-                    <Zap className="h-4 w-4 text-yellow-500" />
-                    <h4 className="text-sm font-medium">Try asking:</h4>
-                 </div>
-                 <div className="flex flex-wrap gap-2">
-                    {QUICK_ACTIONS.map(q => (
-                        <Button key={q} size="sm" variant="outline" onClick={() => handleSendMessage(q)}>{q}</Button>
-                    ))}
-                 </div>
+              <div className="flex items-center gap-2 mb-2">
+                <Zap className="h-4 w-4 text-yellow-500" />
+                <h4 className="text-sm font-medium">Try asking:</h4>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {QUICK_ACTIONS.map(q => (
+                  <Button key={q} size="sm" variant="outline" onClick={() => handleSendMessage(q)}>{q}</Button>
+                ))}
+              </div>
             </div>
           )}
 
