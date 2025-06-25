@@ -3,11 +3,14 @@ import { GoogleGenerativeAI } from 'npm:@google/generative-ai@0.15.0';
 import { corsHeaders } from '../_shared/cors.ts';
 
 // --- Tool Implementations ---
+// Note: All functions now default 'args' to an empty object {} to prevent crashes
+// when the AI calls a function without parameters.
 
 // --- Product & Inventory Management ---
 
-async function getProductDetails(supabase, args) {
+async function getProductDetails(supabase, args = {}) {
   const { productName } = args;
+  if (!productName) return { error: "Product name is required." };
   console.log(`Tool called: getProductDetails for ${productName}`);
   const { data: product, error } = await supabase
     .from('products')
@@ -20,7 +23,7 @@ async function getProductDetails(supabase, args) {
   return product;
 }
 
-async function listProducts(supabase, args) {
+async function listProducts(supabase, args = {}) {
   const { page = 1, limit = 10, category, company } = args;
   console.log(`Tool called: listProducts with page=${page}, limit=${limit}, category=${category}, company=${company}`);
   let query = supabase.from('products').select('name, current_stock, selling_price', { count: 'exact' });
@@ -42,8 +45,9 @@ async function listProducts(supabase, args) {
 }
 
 
-async function findProducts(supabase, args) {
+async function findProducts(supabase, args = {}) {
   const { searchTerm } = args;
+  if (!searchTerm) return { error: "A search term is required." };
   console.log(`Tool called: findProducts for ${searchTerm}`);
   const { data, error } = await supabase
     .from('products')
@@ -56,8 +60,9 @@ async function findProducts(supabase, args) {
   return { productCount: data.length, products: data };
 }
 
-async function getProductStock(supabase, args) {
+async function getProductStock(supabase, args = {}) {
   const { productName } = args;
+  if (!productName) return { error: "Product name is required." };
   console.log(`Tool called: getProductStock for ${productName}`);
   const { data: product, error } = await supabase
     .from('products')
@@ -70,8 +75,9 @@ async function getProductStock(supabase, args) {
   return product;
 }
 
-async function updateStock(supabase, args) {
+async function updateStock(supabase, args = {}) {
   const { productName, newStock } = args;
+  if (!productName || newStock === undefined) return { error: "Product name and new stock quantity are required." };
   console.log(`Tool called: updateStock for ${productName} to ${newStock}`);
   const { data: product, error: productError } = await supabase.from('products').select('id, name').ilike('name', `%${productName}%`).single();
   if (productError || !product) {
@@ -96,8 +102,9 @@ async function getOutOfStockProducts(supabase) {
   return { productCount: data.length, products: data };
 }
 
-async function getRecentDeletions(supabase, args) {
+async function getRecentDeletions(supabase, args = {}) {
   const { timeRange } = args;
+  if (!timeRange) return { error: "A time range ('today' or 'last 7 days') is required." };
   console.log(`Tool called: getRecentDeletions for ${timeRange}`);
   let startDate = new Date();
   if (timeRange === 'today') {
@@ -118,9 +125,9 @@ async function getRecentDeletions(supabase, args) {
   return { deletionCount: data.length, deletions: data };
 }
 
-async function listAvailableProducts(supabase, args) {
+async function listAvailableProducts(supabase, args = {}) {
   const { limit = 10 } = args;
-  console.log(`Tool called: listAvailableProducts`);
+  console.log(`Tool called: listAvailableProducts with limit ${limit}`);
   const { data, error } = await supabase
     .from('products')
     .select('name, sku, current_stock')
@@ -138,7 +145,7 @@ async function listAvailableProducts(supabase, args) {
 
 // --- Sales & Revenue Analysis ---
 
-async function getSalesSummary(supabase, args) {
+async function getSalesSummary(supabase, args = {}) {
   const { startDate, endDate } = args;
   console.log(`Tool called: getSalesSummary from ${startDate} to ${endDate}`);
   let query = supabase.from('transactions').select('total_amount, quantity');
@@ -156,13 +163,15 @@ async function getSalesSummary(supabase, args) {
   return { totalRevenue, totalItemsSold, totalTransactions };
 }
 
-async function getBestSellingProducts(supabase, args) {
+async function getBestSellingProducts(supabase, args = {}) {
   const { limit = 5, timePeriod = 'last 30 days' } = args;
-  console.log(`Tool called: getBestSellingProducts for ${timePeriod}`);
+  console.log(`Tool called: getBestSellingProducts for ${timePeriod} with limit ${limit}`);
   let startDate = new Date();
-  startDate.setDate(startDate.getDate() - 30); // Default to last 30 days
+
   if (timePeriod === 'last 7 days') {
     startDate.setDate(startDate.getDate() - 7);
+  } else { // Default to 30 days
+    startDate.setDate(startDate.getDate() - 30);
   }
 
   const { data, error } = await supabase.rpc('get_best_selling_products', {
@@ -170,13 +179,17 @@ async function getBestSellingProducts(supabase, args) {
     limit_count: limit
   });
 
-  if (error) return { error: 'Failed to get best selling products.' };
+  if (error) {
+    console.error("RPC Error:", error);
+    return { error: 'Failed to get best selling products. Make sure the RPC function exists and permissions are correct.' };
+  }
   return { bestSellers: data };
 }
 
 
-async function getProductSales(supabase, args) {
+async function getProductSales(supabase, args = {}) {
   const { productName, startDate, endDate } = args;
+  if (!productName) return { error: "Product name is required." };
   console.log(`Tool called: getProductSales for ${productName} from ${startDate} to ${endDate}`);
   const { data: product, error: productError } = await supabase.from('products').select('id, name').ilike('name', `%${productName}%`).single();
   if (productError || !product) {
@@ -199,8 +212,9 @@ async function getProductSales(supabase, args) {
 
 // --- Transaction & Order Management ---
 
-async function lookupTransaction(supabase, args) {
+async function lookupTransaction(supabase, args = {}) {
   const { transactionId } = args;
+  if (!transactionId) return { error: "Transaction ID is required." };
   console.log(`Tool called: lookupTransaction for ${transactionId}`);
   const { data, error } = await supabase
     .from('transactions')
@@ -213,8 +227,9 @@ async function lookupTransaction(supabase, args) {
 
 // --- User & Access Management ---
 
-async function getUserActivity(supabase, args) {
+async function getUserActivity(supabase, args = {}) {
   const { adminName } = args;
+  if (!adminName) return { error: "Admin name is required." };
   console.log(`Tool called: getUserActivity for ${adminName}`);
   const { data: admin, error: adminError } = await supabase.from('admins').select('id, full_name').ilike('full_name', `%${adminName}%`).single();
   if (adminError || !admin) {
@@ -322,7 +337,7 @@ Deno.serve(async (req) => {
         { name: 'getUnresolvedAnomalies', description: 'Retrieves a list of all system-detected anomalies that have not been resolved yet.', parameters: { type: 'OBJECT', properties: {} } },
         { name: 'getSystemHealthSummary', description: 'Provides a mock summary of the system health.', parameters: { type: 'OBJECT', properties: {} } },
         // Category & Company
-        { name: 'listCategories', description: 'Retrieves a list of all product categories.', parameters: { type: 'OBJECT', properties: {} } },
+        { name: 'listCategories', description: 'Retrieve a list of all product categories.', parameters: { type: 'OBJECT', properties: {} } },
         { name: 'listCompanies', description: 'Retrieves a list of all companies/suppliers.', parameters: { type: 'OBJECT', properties: {} } },
       ]
     }];
@@ -376,7 +391,6 @@ Deno.serve(async (req) => {
 
       let toolResult;
       if (toolMap[call.name]) {
-        // **FIX**: Pass the entire arguments object instead of spreading its values
         toolResult = await toolMap[call.name](supabase, call.args);
       } else {
         toolResult = { error: "Unknown function call" };
