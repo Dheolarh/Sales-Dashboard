@@ -157,17 +157,6 @@ ALTER TABLE inventory_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE error_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies (Allow authenticated users to read/write)
-CREATE POLICY "Authenticated users can manage companies" ON companies FOR ALL TO authenticated USING (true);
-CREATE POLICY "Authenticated users can manage categories" ON categories FOR ALL TO authenticated USING (true);
-CREATE POLICY "Authenticated users can manage products" ON products FOR ALL TO authenticated USING (true);
-CREATE POLICY "Authenticated users can manage admins" ON admins FOR ALL TO authenticated USING (true);
-CREATE POLICY "Authenticated users can manage access_logs" ON access_logs FOR ALL TO authenticated USING (true);
-CREATE POLICY "Authenticated users can manage transactions" ON transactions FOR ALL TO authenticated USING (true);
-CREATE POLICY "Authenticated users can manage inventory_logs" ON inventory_logs FOR ALL TO authenticated USING (true);
-CREATE POLICY "Authenticated users can manage error_logs" ON error_logs FOR ALL TO authenticated USING (true);
-CREATE POLICY "Authenticated users can manage notifications" ON notifications FOR ALL TO authenticated USING (true);
-
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_products_company_id ON products(company_id);
 CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id);
