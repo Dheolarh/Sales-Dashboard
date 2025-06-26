@@ -1,53 +1,38 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react' // --- MODIFIED: Removed useState, useEffect ---
 import { Bell, X, CheckCircle, AlertTriangle, Info, Clock } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
-import { dbService, supabase } from '../../lib/supabase'
+import { supabase } from '../../lib/supabase' // --- MODIFIED: Removed dbService import ---
 import { formatDateTime } from '../../utils/format'
-import { useAuthContext } from '../../hooks/AuthContext'
 import type { Notification } from '../../lib/supabase'
 
+// --- ADDED: Define props for the component ---
 interface NotificationCenterProps {
   isOpen: boolean
   onClose: () => void
+  notifications: Notification[]
+  loading: boolean
+  onNotificationsUpdate: () => void; // Function to trigger a refresh
 }
 
 export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   isOpen,
-  onClose
+  onClose,
+  notifications,
+  loading,
+  onNotificationsUpdate
 }) => {
-  const { admin } = useAuthContext()
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (isOpen) {
-      loadNotifications()
-    }
-  }, [isOpen, admin])
-
-  const loadNotifications = async () => {
-    try {
-      const data = await dbService.getNotifications(admin?.id)
-      setNotifications(data.slice(0, 20)) // Show last 20 notifications
-    } catch (error) {
-      console.error('Failed to load notifications:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // --- REMOVED: The local useState and useEffect for loading notifications are gone ---
 
   const markAsRead = async (notificationId: string) => {
     try {
       await supabase
         .from('notifications')
         .update({ is_read: true })
-        .eq('id', notificationId)
+        .eq('id', notificationId);
       
-      setNotifications(prev => 
-        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
-      )
+      onNotificationsUpdate(); // --- MODIFIED: Refresh data from the parent ---
     } catch (error) {
       console.error('Failed to mark notification as read:', error)
     }
@@ -55,15 +40,15 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
   const markAllAsRead = async () => {
     try {
-      const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id)
-      if (unreadIds.length === 0) return
+      const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+      if (unreadIds.length === 0) return;
 
       await supabase
         .from('notifications')
         .update({ is_read: true })
-        .in('id', unreadIds)
+        .in('id', unreadIds);
       
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+      onNotificationsUpdate(); // --- MODIFIED: Refresh data from the parent ---
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error)
     }

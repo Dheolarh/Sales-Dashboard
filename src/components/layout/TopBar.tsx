@@ -1,42 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom'; // --- ADDED ---
 import { Bell, User, LogOut, Globe, ExternalLink, Settings } from 'lucide-react';
 import { useAuthContext } from '../../hooks/AuthContext';
-import { dbService } from '../../lib/supabase';
 import { NotificationCenter } from '../notifications/NotificationCenter';
 import { Badge } from '../ui/Badge';
 import type { Notification } from '../../lib/supabase';
-import { useSettingsContext } from '../../hooks/SettingsContext'; // --- NEW ---
+import { useSettingsContext } from '../../hooks/SettingsContext';
 
-export const TopBar: React.FC = () => {
+// --- ADDED: An interface to define the props this component now expects ---
+interface TopBarProps {
+  notifications: Notification[];
+  loading: boolean;
+  onRefresh: () => void;
+}
+
+// --- MODIFIED: The component now accepts props ---
+export const TopBar: React.FC<TopBarProps> = ({ notifications, loading, onRefresh }) => {
   const { admin, logout } = useAuthContext();
-  const { preferences } = useSettingsContext(); // --- NEW ---
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { preferences } = useSettingsContext();
   const [showNotifications, setShowNotifications] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  useEffect(() => {
+  // --- REMOVED: The useEffect hook that fetched notifications locally is now gone. ---
+  // That logic has been "lifted up" to DashboardLayout.tsx.
+
+  // This useEffect for the clock can remain.
+  React.useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    const loadNotifications = async () => {
-      if (admin) {
-        try {
-          const data = await dbService.getNotifications(admin.id);
-          setNotifications(data.filter(n => !n.is_read).slice(0, 5));
-        } catch (error) {
-          console.error('Failed to load notifications:', error);
-        }
-      }
-    };
-
-    loadNotifications();
-    const interval = setInterval(loadNotifications, 30000);
-    return () => clearInterval(interval);
-  }, [admin]);
-
-  const unreadCount = notifications.length;
+  // --- MODIFIED: The unread count is now calculated from the 'notifications' prop ---
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const openStore = () => {
     window.open('/store', '_blank');
@@ -59,12 +54,11 @@ export const TopBar: React.FC = () => {
               <span>View Store</span>
             </button>
 
-            {/* --- MODIFIED: Uses the timezone from settings context --- */}
             <div className="flex items-center space-x-2 text-sm text-gray-600">
               <Globe className="h-4 w-4" />
               <span>
                 {currentTime.toLocaleString('en-US', {
-                  timeZone: preferences.timezone, // Use context value
+                  timeZone: preferences.timezone,
                   dateStyle: 'medium',
                   timeStyle: 'medium'
                 })} {preferences.timezone}
@@ -90,10 +84,10 @@ export const TopBar: React.FC = () => {
               </button>
             </div>
 
-            {/* Settings */}
-            <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
+            {/* --- MODIFIED: Wrapped button content with a Link for proper navigation --- */}
+            <Link to="/settings" className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
               <Settings className="h-5 w-5" />
-            </button>
+            </Link>
 
             {/* User Menu */}
             <div className="flex items-center space-x-3">
@@ -118,10 +112,13 @@ export const TopBar: React.FC = () => {
         </div>
       </header>
 
-      {/* Notification Center */}
+      {/* --- MODIFIED: Pass the new props down to the NotificationCenter --- */}
       <NotificationCenter
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
+        notifications={notifications}
+        loading={loading}
+        onNotificationsUpdate={onRefresh}
       />
     </>
   )
