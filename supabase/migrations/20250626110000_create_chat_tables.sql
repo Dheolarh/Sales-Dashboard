@@ -26,25 +26,3 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 -- Enable RLS for the new tables
 ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies
--- Admins can manage their own chat sessions
-CREATE POLICY "Admins can manage their own chat sessions"
-ON chat_sessions FOR ALL
-TO authenticated
-USING (auth.uid() = admin_id)
-WITH CHECK (auth.uid() = admin_id);
-
--- Admins can manage messages in their own chat sessions
-CREATE POLICY "Admins can manage messages in their own sessions"
-ON chat_messages FOR ALL
-TO authenticated
-USING (
-  session_id IN (
-    SELECT id FROM chat_sessions WHERE admin_id = auth.uid()
-  )
-);
-
--- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_chat_sessions_admin_id ON chat_sessions(admin_id);
-CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
