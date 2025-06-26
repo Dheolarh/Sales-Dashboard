@@ -30,74 +30,25 @@ export const EcommerceCart: React.FC<EcommerceCartProps> = ({
   const [orderComplete, setOrderComplete] = useState(false)
 
   const processCheckout = async () => {
-    if (cart.length === 0) return
+    // Don't calculate stock here. Just call the function.
+    const { error } = await supabase.functions.invoke('process-checkout', {
+      body: { cart }, // Send the cart to the secure function
+    });
 
-    setIsProcessing(true)
-    
-    try {
-      // Detect customer location
-      const location = await detectLocation()
-      const customerLocation = `${location.city}, ${location.country}`
-      
-      // Process each item in the cart
-      for (const item of cart) {
-        const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-        
-        // Create transaction record
-        await supabase.from('transactions').insert({
-          transaction_id: transactionId,
-          product_id: item.product.id,
-          quantity: item.quantity,
-          unit_price: item.product.selling_price,
-          total_amount: item.product.selling_price * item.quantity,
-          customer_location: customerLocation,
-          transaction_time: getCurrentUTCTime(),
-          status: 'completed'
-        })
-
-        // Update product stock
-        const newStock = item.product.current_stock - item.quantity
-        await supabase
-          .from('products')
-          .update({ 
-            current_stock: newStock,
-            updated_at: getCurrentUTCTime()
-          })
-          .eq('id', item.product.id)
-
-        // Log inventory change
-        await supabase.from('inventory_logs').insert({
-          product_id: item.product.id,
-          change_type: 'sale',
-          quantity_change: -item.quantity,
-          previous_stock: item.product.current_stock,
-          new_stock: newStock,
-          reason: `Online sale - Transaction ${transactionId}`,
-          location: customerLocation
-        })
-      }
-
-      setOrderComplete(true)
-      
-      // After 3 seconds, reload the page
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000)
-
-    } catch (error) {
-      console.error('Checkout failed:', error)
-      alert('Checkout failed. Please try again.')
-    } finally {
-      setIsProcessing(false)
+    if (error) {
+      console.error("Checkout failed:", error);
+    } else {
+      console.log("Checkout successful!");
+      // Clear cart, show success message, etc.
     }
-  }
+  };
 
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} />
-      
+
       <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl">
         <div className="flex flex-col h-full">
           {/* Header */}
@@ -138,12 +89,12 @@ export const EcommerceCart: React.FC<EcommerceCartProps> = ({
                           alt={item.product.name}
                           className="w-12 h-12 object-cover rounded"
                         />
-                        
+
                         <div className="flex-1 min-w-0">
                           <h4 className="font-medium text-gray-900 truncate">{item.product.name}</h4>
                           <p className="text-sm text-gray-600">{formatCurrency(item.product.selling_price)}</p>
                         </div>
-                        
+
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={() => onUpdateQuantity(item.product.id, item.quantity - 1)}
@@ -151,9 +102,9 @@ export const EcommerceCart: React.FC<EcommerceCartProps> = ({
                           >
                             <Minus className="h-4 w-4" />
                           </button>
-                          
+
                           <span className="w-8 text-center font-medium">{item.quantity}</span>
-                          
+
                           <button
                             onClick={() => onUpdateQuantity(item.product.id, item.quantity + 1)}
                             className="p-1 text-gray-400 hover:text-gray-600 rounded"
@@ -175,7 +126,7 @@ export const EcommerceCart: React.FC<EcommerceCartProps> = ({
                     <span>Total:</span>
                     <span>{formatCurrency(totalPrice)}</span>
                   </div>
-                  
+
                   <Button
                     onClick={processCheckout}
                     disabled={isProcessing}
