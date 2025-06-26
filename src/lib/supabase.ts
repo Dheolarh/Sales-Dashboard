@@ -554,4 +554,26 @@ export const dbService = {
     return data as ChatMessage;
   },
 
+  async renameChatSession(sessionId: string, newTitle: string) {
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .update({ title: newTitle, updated_at: new Date().toISOString() })
+      .eq('id', sessionId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as ChatSession;
+  },
+
+  async deleteChatSession(sessionId: string) {
+    const { error } = await supabase
+      .from('chat_sessions')
+      .delete()
+      .eq('id', sessionId);
+    
+    if (error) throw error;
+    return { success: true };
+  },
+
 }

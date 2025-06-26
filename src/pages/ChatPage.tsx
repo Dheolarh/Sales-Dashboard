@@ -25,21 +25,32 @@ export const ChatPage: React.FC = () => {
   const [isSidebarLoading, setIsSidebarLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const handleNewChat = useCallback(async () => {
+    if (!admin) return null;
+    const newSession = await dbService.createChatSession(admin.id, `New Chat`);
+    setSessions(prev => [newSession, ...prev]);
+    setActiveSession(newSession);
+    return newSession;
+  }, [admin]);
+
   const loadSessions = useCallback(async () => {
     if (!admin) return;
     setIsSidebarLoading(true);
     try {
       const data = await dbService.getChatSessions(admin.id);
       setSessions(data);
-      if (data.length > 0 && !activeSession) {
+      if (data.length > 0) {
         setActiveSession(data[0]);
+      } else {
+        // If no sessions exist, create one.
+        await handleNewChat();
       }
     } catch (error) {
       console.error("Failed to load chat sessions:", error);
     } finally {
       setIsSidebarLoading(false);
     }
-  }, [admin, activeSession]);
+  }, [admin, handleNewChat]);
 
   useEffect(() => {
     loadSessions();
@@ -61,18 +72,33 @@ export const ChatPage: React.FC = () => {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isLoading]);
 
-  const handleNewChat = async () => {
+  const handleAutoRenameSession = async (sessionId: string, firstMessage: string) => {
     if (!admin) return;
-    const newSession = await dbService.createChatSession(admin.id, `New Chat ${sessions.length + 1}`);
-    setSessions([newSession, ...sessions]);
-    setActiveSession(newSession);
+    try {
+      // This is a "fire-and-forget" call. We don't need to wait for it.
+      supabase.functions.invoke('ai-chat', {
+        body: {
+          query: firstMessage,
+          task: 'generate_title', // Special task for the AI
+          sessionId,
+          user: { id: admin.id, name: admin.full_name }
+        },
+      }).then(() => {
+        // Refresh sessions to get the new title
+        loadSessions();
+      });
+    } catch (error) {
+      console.error("Failed to trigger auto-rename:", error);
+    }
   };
 
   const handleSendMessage = async (messageText?: string) => {
     const query = (messageText || inputValue).trim();
     if (!query || isLoading || !activeSession || !admin) return;
+
+    const isFirstMessage = messages.length === 0;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -89,8 +115,13 @@ export const ChatPage: React.FC = () => {
     // Persist user message
     await dbService.addChatMessage({ session_id: activeSession.id, role: 'user', content: query });
 
-    const historyForAPI = messages.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
+    // If it's the first message, trigger auto-naming in the background
+    if (isFirstMessage && activeSession.title === 'New Chat') {
+      handleAutoRenameSession(activeSession.id, query);
+    }
+
+    const historyForAPI = [...messages, userMessage].map(m => ({
+      role: m.role,
       parts: [{ text: m.content }]
     }));
 
@@ -98,28 +129,25 @@ export const ChatPage: React.FC = () => {
       const { data, error } = await supabase.functions.invoke('ai-chat', {
         body: { query, history: historyForAPI, user: { id: admin.id, name: admin.full_name } },
       });
-
       if (error) throw new Error(error.message);
 
-      const assistantMessage: ChatMessage = {
-        id: Date.now().toString() + '-ai',
-        session_id: activeSession.id,
-        role: 'assistant',
-        content: data.response,
-        created_at: new Date().toISOString()
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-      await dbService.addChatMessage({ session_id: activeSession.id, role: 'assistant', content: data.response });
-
+      const assistantMessageContent = data.response || "Sorry, I couldn't generate a response.";
+      await dbService.addChatMessage({ session_id: activeSession.id, role: 'assistant', content: assistantMessageContent });
+      setMessages(prev => [...prev, { id: Date.now().toString() + '-ai', session_id: activeSession.id, role: 'assistant', content: assistantMessageContent, created_at: new Date().toISOString() }]);
     } catch (error) {
       console.error('Failed to get AI response:', error);
       const errorMessageContent = "I'm sorry, I encountered an error. Please try again.";
-      setMessages(prev => [...prev, { id: 'error', session_id: activeSession.id, role: 'assistant', content: errorMessageContent, created_at: new Date().toISOString() }]);
       await dbService.addChatMessage({ session_id: activeSession.id, role: 'assistant', content: errorMessageContent });
+      setMessages(prev => [...prev, { id: 'error', session_id: activeSession.id, role: 'assistant', content: errorMessageContent, created_at: new Date().toISOString() }]);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!confirm("Are you sure you want to delete this chat?")) return;
+    await dbService.deleteChatSession(sessionId);
+    await loadSessions();
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -129,6 +157,7 @@ export const ChatPage: React.FC = () => {
     }
   };
 
+  // The rest of the JSX remains largely the same but with the new delete button
   return (
     <div className="flex h-[calc(100vh-4rem)]">
       {/* Sidebar for Chat History */}
@@ -139,17 +168,21 @@ export const ChatPage: React.FC = () => {
           </Button>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {isSidebarLoading ? <LoadingSpinner text="Loading chats..." /> : (
+          {isSidebarLoading ? <div className="p-4"><LoadingSpinner text="Loading chats..." /></div> : (
             <nav className="p-2 space-y-1">
               {sessions.map(session => (
-                <button
-                  key={session.id}
-                  onClick={() => setActiveSession(session)}
-                  className={`w-full text-left flex items-center p-2 rounded-md text-sm transition-colors ${activeSession?.id === session.id ? 'bg-quickcart-100 text-quickcart-700' : 'hover:bg-gray-200'}`}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  <span className="flex-1 truncate">{session.title}</span>
-                </button>
+                <div key={session.id} className="group flex items-center">
+                  <button
+                    onClick={() => setActiveSession(session)}
+                    className={`w-full text-left flex items-center p-2 rounded-md text-sm transition-colors ${activeSession?.id === session.id ? 'bg-quickcart-100 text-quickcart-700' : 'hover:bg-gray-200'}`}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2 flex-shrink-0" />
+                    <span className="flex-1 truncate">{session.title}</span>
+                  </button>
+                  <button onClick={() => handleDeleteSession(session.id)} className="p-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               ))}
             </nav>
           )}
@@ -158,6 +191,7 @@ export const ChatPage: React.FC = () => {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
+        {/* ... (rest of the main chat area JSX is the same as before) ... */}
         <div className="p-6 border-b">
           <h1 className="text-xl font-bold text-gray-900 flex items-center">
             <Bot className="h-6 w-6 text-quickcart-600 mr-3" />
