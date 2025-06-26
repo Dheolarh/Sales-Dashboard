@@ -5,7 +5,8 @@ import { Input } from '../ui/Input'
 import { 
   Settings, 
   Bell, 
-  Eye, 
+  Eye,
+  Clock,
   Moon, 
   Sun, 
   Globe, 
@@ -144,53 +145,15 @@ export const UserPreferences: React.FC = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <Eye className="h-5 w-5 mr-2" />
-            Appearance
+            <Clock className="h-5 w-5 mr-2" />
+            Timezone
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Theme</label>
-            <div className="flex space-x-4">
-              {[
-                { value: 'light', label: 'Light', icon: Sun },
-                { value: 'dark', label: 'Dark', icon: Moon },
-                { value: 'auto', label: 'Auto', icon: Settings }
-              ].map(({ value, label, icon: Icon }) => (
-                <button
-                  key={value}
-                  onClick={() => updateTopLevelPreference('theme', value)}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-md border transition-colors ${
-                    preferences.theme === value
-                      ? 'border-quickcart-500 bg-quickcart-50 text-quickcart-700'
-                      : 'border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+        
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
-              <select
-                value={preferences.language}
-                onChange={(e) => updateTopLevelPreference('language', e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-quickcart-500"
-              >
-                <option value="en">English</option>
-                <option value="es">Español</option>
-                <option value="fr">Français</option>
-                <option value="de">Deutsch</option>
-                <option value="ja">日本語</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
               <select
                 value={preferences.timezone}
                 onChange={(e) => updateTopLevelPreference('timezone', e.target.value)}
