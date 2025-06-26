@@ -10,12 +10,10 @@ import { useSettingsContext } from '../../hooks/SettingsContext';
 // Defines the props the component now receives from DashboardLayout
 interface TopBarProps {
   notifications: Notification[];
-  loading: boolean;
-  onRefresh: () => void;
   setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>; // --- ADDED ---
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ notifications, loading, onRefresh, setNotifications}) => {
+export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications}) => {
   const { admin, logout } = useAuthContext();
   const { preferences } = useSettingsContext();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -61,18 +59,11 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, loading, onRefres
               </span>
             </div>
 
-            <div className="relative">
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-              >
+             <div className="relative">
+              <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
-                  <Badge
-                    variant="error"
-                    size="sm"
-                    className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 flex items-center justify-center text-xs"
-                  >
+                  <Badge variant="error" size="sm" className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 flex items-center justify-center text-xs">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </Badge>
                 )}
@@ -110,7 +101,6 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, loading, onRefres
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
         notifications={notifications}
-        loading={loading}
         setNotifications={setNotifications} // --- MODIFIED: Pass the function down ---
       />
     </>

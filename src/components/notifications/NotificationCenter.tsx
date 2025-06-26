@@ -1,77 +1,68 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // --- ADDED ---
-import { Bell, X, CheckCircle, AlertTriangle, Info, Clock, Trash2 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
+import { useNavigate } from 'react-router-dom';
+import { Bell, X, CheckCircle, Info, Clock, Trash2, Eye } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { supabase } from '../../lib/supabase';
 import { formatDateTime } from '../../utils/format';
 import type { Notification } from '../../lib/supabase';
-import { useAuthContext } from '../../hooks/AuthContext'; // --- ADDED ---
-import { ConfirmDialog } from '../ui/ConfirmDialog'; // --- ADDED ---
+import { useAuthContext } from '../../hooks/AuthContext';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface NotificationCenterProps {
   isOpen: boolean;
   onClose: () => void;
   notifications: Notification[];
-  loading: boolean;
-  setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>; // --- MODIFIED ---
+  setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
 }
 
 export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   isOpen,
   onClose,
   notifications,
-  loading,
-  setNotifications, // --- MODIFIED ---
+  setNotifications,
 }) => {
-  const { admin } = useAuthContext(); // --- ADDED ---
-  const navigate = useNavigate(); // --- ADDED ---
-  const [showClearConfirm, setShowClearConfirm] = useState(false); // --- ADDED ---
-  const [isClearing, setIsClearing] = useState(false); // --- ADDED ---
+  const { admin } = useAuthContext();
+  const navigate = useNavigate();
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
-  // --- FIX: Mark as Read on Click ---
   const handleMarkAsRead = async (notificationId: string) => {
-    // Optimistically update the UI first for an instant effect
+    // Optimistically update the UI for an instant "grayed out" effect
     setNotifications(prev =>
       prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
     );
     try {
-      await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notificationId);
+      await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId);
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
-      // Optional: Revert the UI change if the DB update fails
     }
   };
 
-  // --- FIX: Mark All as Read ---
   const handleMarkAllAsRead = async () => {
-    const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
-    if (unreadIds.length === 0) return;
-
-    // Optimistically update the UI
+    // Optimistically update UI
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     try {
-      await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .in('id', unreadIds);
+      const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+      if (unreadIds.length > 0) {
+        await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
+      }
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
     }
   };
 
-  // --- NEW: Clear All Notifications Functionality ---
   const handleClearAll = async () => {
     setIsClearing(true);
-    if (!admin) return;
+    if (!admin) {
+      setIsClearing(false);
+      return;
+    };
     try {
-      // Delete from DB
-      await supabase.from('notifications').delete().eq('admin_id', admin.id);
-      // Update UI
+      // For this action, we will delete all notifications for the logged-in admin
+      const { error } = await supabase.from('notifications').delete().eq('admin_id', admin.id);
+      if (error) throw error;
+      // After successful deletion, update the UI state to an empty array
       setNotifications([]);
     } catch (error) {
       console.error('Failed to clear notifications:', error);
@@ -81,14 +72,10 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     }
   };
 
-  // --- NEW: Fix "View All" button ---
   const handleViewAll = () => {
-    onClose(); // Close the panel
-    navigate('/notifications'); // Navigate to the notifications page
-    // Note: You will need to create a route and a page for '/notifications' in App.tsx
+    onClose();
+    navigate('/notifications');
   };
-
-  // ... getNotificationIcon, getNotificationColor, etc. helpers remain the same ...
 
   if (!isOpen) return null;
 
@@ -100,7 +87,15 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
           <div className="flex flex-col h-full">
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              {/* ... Header Title and Badge ... */}
+              <div className="flex items-center space-x-2">
+                <Bell className="h-5 w-5 text-quickcart-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Notifications</h2>
+                {notifications.filter(n => !n.is_read).length > 0 && (
+                  <Badge variant="error" size="sm">
+                    {notifications.filter(n => !n.is_read).length}
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center space-x-2">
                 {notifications.some(n => !n.is_read) && (
                   <Button size="sm" variant="ghost" onClick={handleMarkAllAsRead} className="text-xs">
@@ -112,34 +107,33 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                 </button>
               </div>
             </div>
-
             {/* Notifications List */}
             <div className="flex-1 overflow-y-auto">
-              {/* ... Loading and Empty states ... */}
-              {!loading && notifications.length > 0 && (
+              {notifications.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Bell className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No notifications</h3>
+                  <p className="text-gray-600">You're all caught up!</p>
+                </div>
+              ) : (
                 <div className="divide-y divide-gray-200">
-                  {notifications.map(notification => {
-                    // ... icon and color logic ...
-                    return (
-                      // --- MODIFIED: onClick now calls handleMarkAsRead ---
-                      <div key={notification.id} onClick={() => handleMarkAsRead(notification.id)}>
-                        {/* ... Rest of the notification item JSX ... */}
-                      </div>
-                    )
-                  })}
+                  {notifications.map(notification => (
+                    <div key={notification.id} className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${!notification.is_read ? 'bg-blue-50' : ''}`} onClick={() => handleMarkAsRead(notification.id)}>
+                      <h4 className={`text-sm font-medium ${!notification.is_read ? 'text-gray-900' : 'text-gray-500'}`}>{notification.title}</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{notification.message}</p>
+                      <p className="text-xs text-gray-400 mt-1">{formatDateTime(notification.created_at)}</p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-
             {/* Footer */}
             <div className="border-t border-gray-200 p-4 space-y-2">
-              {/* --- MODIFIED: This button now works --- */}
               <Button variant="outline" className="w-full" onClick={handleViewAll}>
                 View All Notifications
               </Button>
-              {/* --- NEW: Clear All button --- */}
               {notifications.length > 0 && (
-                <Button variant="ghost" className="w-full text-red-600 hover:bg-red-50" onClick={() => setShowClearConfirm(true)}>
+                <Button variant="destructive" className="w-full" onClick={() => setShowClearConfirm(true)}>
                   <Trash2 className="h-4 w-4 mr-2" />
                   Clear All Notifications
                 </Button>
@@ -148,14 +142,12 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
           </div>
         </div>
       </div>
-
-      {/* --- NEW: Confirmation Dialog for Clearing --- */}
       <ConfirmDialog
         isOpen={showClearConfirm}
         onClose={() => setShowClearConfirm(false)}
         onConfirm={handleClearAll}
         title="Clear All Notifications?"
-        message="Are you sure you want to permanently delete all your notifications? This action cannot be undone."
+        message="This will permanently delete all of your notifications. This action cannot be undone."
         type="danger"
         confirmText="Yes, Clear All"
         loading={isClearing}

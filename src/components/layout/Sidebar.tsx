@@ -4,6 +4,7 @@ import {
   LayoutDashboard, 
   Package, 
   ShoppingCart, 
+  Bell,
   Users, 
   AlertTriangle, 
   BarChart3, 
@@ -28,6 +29,7 @@ const navigation = [
   { name: 'Access Logs', href: '/access-logs', icon: Shield },
   { name: 'AI Monitor', href: '/monitor', icon: Activity },
   { name: 'Chat (Stella)', href: '/chat', icon: MessageSquare },
+  { name: 'Notifications', href: '/notifications', icon: Bell },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 

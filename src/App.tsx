@@ -15,6 +15,7 @@ import { AccessLogsPage } from './pages/AccessLogsPage'
 import { AnalyticsPage } from './pages/AnalyticsPage'
 import { ChatPage } from './pages/ChatPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { NotificationsPage } from './pages/NotificationsPage'
 import { useAuthContext } from './hooks/AuthContext'
 import { useToast } from './hooks/useToast'
 import { ToastContainer } from './components/ui/Toast'
@@ -59,6 +60,7 @@ function App() {
               <Route path="access-logs" element={<AccessLogsPage />} />
               <Route path="chat" element={<ChatPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
             </Route>
           </Routes>
         </div>

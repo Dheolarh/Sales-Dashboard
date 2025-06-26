@@ -2,7 +2,7 @@ import React from 'react'
 import { cn } from '../../utils/cn'
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost'
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive'
   size?: 'sm' | 'md' | 'lg'
   children: React.ReactNode
 }
@@ -20,7 +20,8 @@ export const Button: React.FC<ButtonProps> = ({
     primary: 'bg-quickcart-600 text-white hover:bg-quickcart-700',
     secondary: 'bg-quickcart-100 text-quickcart-900 hover:bg-quickcart-200',
     outline: 'border border-quickcart-300 bg-transparent hover:bg-quickcart-50',
-    ghost: 'hover:bg-quickcart-100 hover:text-quickcart-900'
+    ghost: 'hover:bg-quickcart-100 hover:text-quickcart-900',
+    destructive: 'bg-red-600 text-white hover:bg-red-700'
   }
   
   const sizes = {

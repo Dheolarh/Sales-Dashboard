@@ -23,26 +23,26 @@ export const DashboardLayout: React.FC = () => {
   }, [admin]);
 
   useEffect(() => {
-    loadNotifications();
-    const interval = setInterval(loadNotifications, 30000);
-    return () => clearInterval(interval);
-  }, [loadNotifications]);
+    if (admin) {
+      loadNotifications();
+      const interval = setInterval(loadNotifications, 30000); // Poll every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [admin, loadNotifications]);
 
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* --- MODIFIED: Pass the 'setNotifications' function as a prop --- */}
         <TopBar
           notifications={notifications}
           loading={loadingNotifications}
-          onRefresh={loadNotifications}
-          setNotifications={setNotifications}
+          setNotifications={setNotifications} 
         />
         <main className="flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>
     </div>
-  )
+  );
 }
