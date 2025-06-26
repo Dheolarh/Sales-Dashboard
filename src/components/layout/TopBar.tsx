@@ -12,9 +12,10 @@ interface TopBarProps {
   notifications: Notification[];
   loading: boolean;
   onRefresh: () => void;
+  setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>; // --- ADDED ---
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ notifications, loading, onRefresh }) => {
+export const TopBar: React.FC<TopBarProps> = ({ notifications, loading, onRefresh, setNotifications}) => {
   const { admin, logout } = useAuthContext();
   const { preferences } = useSettingsContext();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -110,7 +111,7 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, loading, onRefres
         onClose={() => setShowNotifications(false)}
         notifications={notifications}
         loading={loading}
-        onNotificationsUpdate={onRefresh}
+        setNotifications={setNotifications} // --- MODIFIED: Pass the function down ---
       />
     </>
   )
