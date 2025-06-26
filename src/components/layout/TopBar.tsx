@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom'; // --- ADDED ---
+import { Link } from 'react-router-dom';
 import { Bell, User, LogOut, Globe, ExternalLink, Settings } from 'lucide-react';
 import { useAuthContext } from '../../hooks/AuthContext';
 import { NotificationCenter } from '../notifications/NotificationCenter';
@@ -7,30 +7,25 @@ import { Badge } from '../ui/Badge';
 import type { Notification } from '../../lib/supabase';
 import { useSettingsContext } from '../../hooks/SettingsContext';
 
-// --- ADDED: An interface to define the props this component now expects ---
+// Defines the props the component now receives from DashboardLayout
 interface TopBarProps {
   notifications: Notification[];
   loading: boolean;
   onRefresh: () => void;
 }
 
-// --- MODIFIED: The component now accepts props ---
 export const TopBar: React.FC<TopBarProps> = ({ notifications, loading, onRefresh }) => {
   const { admin, logout } = useAuthContext();
   const { preferences } = useSettingsContext();
   const [showNotifications, setShowNotifications] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // --- REMOVED: The useEffect hook that fetched notifications locally is now gone. ---
-  // That logic has been "lifted up" to DashboardLayout.tsx.
-
-  // This useEffect for the clock can remain.
   React.useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // --- MODIFIED: The unread count is now calculated from the 'notifications' prop ---
+  // The unread count is now correctly calculated from props
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const openStore = () => {
@@ -65,7 +60,6 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, loading, onRefres
               </span>
             </div>
 
-            {/* Notifications */}
             <div className="relative">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
@@ -84,12 +78,10 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, loading, onRefres
               </button>
             </div>
 
-            {/* --- MODIFIED: Wrapped button content with a Link for proper navigation --- */}
             <Link to="/settings" className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
               <Settings className="h-5 w-5" />
             </Link>
 
-            {/* User Menu */}
             <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-quickcart-600 text-white rounded-full flex items-center justify-center">
@@ -112,7 +104,7 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, loading, onRefres
         </div>
       </header>
 
-      {/* --- MODIFIED: Pass the new props down to the NotificationCenter --- */}
+      {/* This is the critical part that passes the refresh function down */}
       <NotificationCenter
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}

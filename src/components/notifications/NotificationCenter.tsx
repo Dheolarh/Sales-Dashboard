@@ -39,6 +39,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   }
 
   const markAllAsRead = async () => {
+    console.log("Attempting to mark all as read..."); // <-- ADD THIS LINE
     try {
       const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
       if (unreadIds.length === 0) return;
