@@ -1,82 +1,110 @@
-import { useState, useEffect } from 'react';
-import { supabase, type Admin } from '../lib/supabase';
-import { Session } from '@supabase/supabase-js';
+import { useState, useEffect } from 'react'
+import { supabase, type Admin } from '../lib/supabase'
+import { detectLocation, getCurrentUTCTime } from '../utils/location'
 
 interface AuthState {
-  session: Session | null;
-  admin: Admin | null;
-  loading: boolean;
-  error: string | null;
+  admin: Admin | null
+  loading: boolean
+  error: string | null
 }
 
 export const useAuth = () => {
   const [authState, setAuthState] = useState<AuthState>({
-    session: null,
     admin: null,
     loading: true,
     error: null
-  });
+  })
 
   useEffect(() => {
-    const fetchSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setAuthState(prev => ({ ...prev, session, loading: !session }));
-
-      if (session) {
-        const { data: adminProfile } = await supabase
-          .from('admins')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        setAuthState(prev => ({ ...prev, admin: adminProfile as Admin, loading: false }));
+    // Check if user is already logged in (from localStorage)
+    const savedAdmin = localStorage.getItem('quickcart_admin')
+    if (savedAdmin) {
+      try {
+        const admin = JSON.parse(savedAdmin)
+        setAuthState({ admin, loading: false, error: null })
+      } catch (error) {
+        localStorage.removeItem('quickcart_admin')
+        setAuthState({ admin: null, loading: false, error: null })
       }
-    };
-
-    fetchSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setAuthState(prev => ({ ...prev, session, loading: true }));
-        if (session) {
-          const { data: adminProfile } = await supabase
-            .from('admins')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          setAuthState(prev => ({ ...prev, admin: adminProfile as Admin, loading: false }));
-        } else {
-          setAuthState(prev => ({ ...prev, admin: null, loading: false }));
-        }
-      }
-    );
-
-    return () => {
-      subscription?.unsubscribe();
-    };
-  }, []);
+    } else {
+      setAuthState({ admin: null, loading: false, error: null })
+    }
+  }, [])
 
   const login = async (email: string, password: string) => {
-    setAuthState(prev => ({ ...prev, loading: true, error: null }));
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      // Use a more user-friendly error message
-      const errorMessage = error.message === 'Invalid login credentials' 
-        ? 'Invalid email or password. Please try again.' 
-        : error.message;
-      setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));
-      throw new Error(errorMessage);
-    }
-  };
+    setAuthState(prev => ({ ...prev, loading: true, error: null }))
+    const trimmedEmail = email.trim();
 
-  const logout = async () => {
-    setAuthState(prev => ({...prev, loading: true}));
-    await supabase.auth.signOut();
-    setAuthState({ session: null, admin: null, loading: false, error: null });
-  };
+    try {
+      // Get admin by email (simplified auth for demo)
+      const { data: admin, error } = await supabase
+        .from('admins')
+        .select('*')
+        .eq('email', trimmedEmail)
+        .eq('is_active', true)
+        .single()
+
+      if (error || !admin) {
+        throw new Error('Invalid credentials')
+      }
+
+      // Detect location for access logging
+      const location = await detectLocation()
+
+      // Log the access
+      await supabase.from('access_logs').insert({
+        admin_id: admin.id,
+        email: admin.email,
+        login_time: getCurrentUTCTime(),
+        location: `${location.city}, ${location.country}`,
+        ip_address: location.ip,
+        user_agent: navigator.userAgent,
+        success: true
+      })
+
+      // Update admin's last login
+      await supabase
+        .from('admins')
+        .update({ last_login: getCurrentUTCTime() })
+        .eq('id', admin.id)
+
+      // Save to localStorage
+      localStorage.setItem('quickcart_admin', JSON.stringify(admin))
+      
+      setAuthState({ admin, loading: false, error: null })
+      return admin
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Login failed'
+      
+      // Log failed access attempt
+      try {
+        const location = await detectLocation()
+        await supabase.from('access_logs').insert({
+          admin_id: null,
+          email: email,
+          login_time: getCurrentUTCTime(),
+          location: `${location.city}, ${location.country}`,
+          ip_address: location.ip,
+          user_agent: navigator.userAgent,
+          success: false
+        })
+      } catch (logError) {
+        console.error('Failed to log access attempt:', logError)
+      }
+      
+      setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }))
+      throw error
+    }
+  }
+
+  const logout = () => {
+    localStorage.removeItem('quickcart_admin')
+    setAuthState({ admin: null, loading: false, error: null })
+  }
 
   return {
     ...authState,
     login,
     logout
-  };
-};
+  }
+}
