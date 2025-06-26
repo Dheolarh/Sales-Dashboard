@@ -18,7 +18,6 @@ export const useAuth = () => {
   });
 
   useEffect(() => {
-    // Fetch initial session
     const fetchSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setAuthState(prev => ({ ...prev, session, loading: !session }));
@@ -35,7 +34,6 @@ export const useAuth = () => {
 
     fetchSession();
 
-    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setAuthState(prev => ({ ...prev, session, loading: true }));
@@ -61,8 +59,12 @@ export const useAuth = () => {
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setAuthState(prev => ({ ...prev, loading: false, error: error.message }));
-      throw error;
+      // Use a more user-friendly error message
+      const errorMessage = error.message === 'Invalid login credentials' 
+        ? 'Invalid email or password. Please try again.' 
+        : error.message;
+      setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));
+      throw new Error(errorMessage);
     }
   };
 

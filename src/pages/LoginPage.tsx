@@ -1,26 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from '../components/layout/Header';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { useAuthContext } from '../hooks/AuthContext';
 import { Navigate } from 'react-router-dom';
+import { detectLocation, getCurrentUTCTime, type LocationData } from '../utils/location';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [location, setLocation] = useState<LocationData | null>(null);
   const { login, loading, error, admin } = useAuthContext();
+
+  useEffect(() => {
+    // Detect user location on page load
+    detectLocation().then(setLocation);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await login(email, password);
     } catch (err) {
-      // Error is handled by the useAuth hook
+      // Error is already handled by the useAuth hook
     }
   };
 
-  // If the user is already logged in, redirect them to the dashboard
   if (admin) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -69,6 +75,15 @@ export const LoginPage: React.FC = () => {
                   {loading ? 'Signing in...' : 'Sign In'}
                 </Button>
               </form>
+              
+              {location && (
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
+                  <p className="text-sm text-gray-700 font-medium">Login Location Detected:</p>
+                  <p className="text-sm text-gray-600">
+                    {location.city}, {location.country} • {getCurrentUTCTime().split('T')[1].split('.')[0]} UTC
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
