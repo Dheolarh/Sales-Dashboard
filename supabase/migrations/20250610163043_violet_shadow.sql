@@ -146,6 +146,13 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at timestamptz DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS chat_sessions ();
+CREATE TABLE IF NOT EXISTS activity_logs ();
+CREATE TABLE IF NOT EXISTS chat_messages ();
+CREATE TABLE IF NOT EXISTS system_settings ();
+
+
+
 -- Enable Row Level Security
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
@@ -156,6 +163,12 @@ ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE error_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
+
+
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_products_company_id ON products(company_id);
