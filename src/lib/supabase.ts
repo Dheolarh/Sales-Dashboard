@@ -139,7 +139,31 @@ export interface Notification {
   related_error?: ErrorLog
 }
 
-/* --- NEW: Interface for the new activity log table --- */
+export interface ActivityLog {
+  id: string
+  admin_id: string
+  session_id?: string
+  action_type: string
+  details?: Record<string, any>
+  created_at: string
+}
+
+export interface ChatSession {
+  id: string
+  admin_id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMessage {
+  id: string
+  session_id: string
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+}
+
 export interface ActivityLog {
   id: string
   admin_id: string
@@ -182,7 +206,7 @@ export const dbService = {
     if (error) throw error;
     return data;
   },
-  
+
   // Companies
   async getCompanies() {
     const { data, error } = await supabase
@@ -481,5 +505,53 @@ export const dbService = {
       adminName: admin.full_name,
       recentActivity: activities,
     };
-  }
+  },
+
+  async getChatSessions(adminId: string) {
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .select('*')
+      .eq('admin_id', adminId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data as ChatSession[];
+  },
+
+  async getChatMessages(sessionId: string) {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data as ChatMessage[];
+  },
+
+  async createChatSession(adminId: string, title: string) {
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .insert({ admin_id: adminId, title })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as ChatSession;
+  },
+
+  async addChatMessage(message: { session_id: string; role: 'user' | 'assistant'; content: string }) {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .insert(message)
+      .select()
+      .single();
+    
+    // Also update the session's updated_at timestamp
+    await supabase.from('chat_sessions').update({ updated_at: new Date().toISOString() }).eq('id', message.session_id);
+
+    if (error) throw error;
+    return data as ChatMessage;
+  },
+
 }
