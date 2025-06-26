@@ -40,7 +40,9 @@ export const ChatPage: React.FC = () => {
       const data = await dbService.getChatSessions(admin.id);
       setSessions(data);
       if (data.length > 0) {
-        setActiveSession(data[0]);
+        if (!activeSession || !data.find(s => s.id === activeSession.id)) {
+          setActiveSession(data[0]);
+        }
       } else {
         // If no sessions exist, create one.
         await handleNewChat();
@@ -50,11 +52,13 @@ export const ChatPage: React.FC = () => {
     } finally {
       setIsSidebarLoading(false);
     }
-  }, [admin, handleNewChat]);
+  }, [admin, activeSession, handleNewChat]);
 
   useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
+    if (admin) {
+      loadSessions();
+    }
+  }, [admin]);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -77,18 +81,16 @@ export const ChatPage: React.FC = () => {
   const handleAutoRenameSession = async (sessionId: string, firstMessage: string) => {
     if (!admin) return;
     try {
-      // This is a "fire-and-forget" call. We don't need to wait for it.
-      supabase.functions.invoke('ai-chat', {
+      await supabase.functions.invoke('ai-chat', {
         body: {
           query: firstMessage,
           task: 'generate_title', // Special task for the AI
           sessionId,
           user: { id: admin.id, name: admin.full_name }
         },
-      }).then(() => {
-        // Refresh sessions to get the new title
-        loadSessions();
       });
+      // After the AI renames it, reload the sessions to get the new title
+      await loadSessions();
     } catch (error) {
       console.error("Failed to trigger auto-rename:", error);
     }
@@ -98,7 +100,7 @@ export const ChatPage: React.FC = () => {
     const query = (messageText || inputValue).trim();
     if (!query || isLoading || !activeSession || !admin) return;
 
-    const isFirstMessage = messages.length === 0;
+    const isFirstMessageInNewChat = messages.length === 0 && activeSession.title === 'New Chat';
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -112,16 +114,14 @@ export const ChatPage: React.FC = () => {
     setInputValue('');
     setIsLoading(true);
 
-    // Persist user message
     await dbService.addChatMessage({ session_id: activeSession.id, role: 'user', content: query });
 
-    // If it's the first message, trigger auto-naming in the background
-    if (isFirstMessage && activeSession.title === 'New Chat') {
+    if (isFirstMessageInNewChat) {
       handleAutoRenameSession(activeSession.id, query);
     }
 
     const historyForAPI = [...messages, userMessage].map(m => ({
-      role: m.role,
+      role: m.role as 'user' | 'model',
       parts: [{ text: m.content }]
     }));
 
@@ -132,13 +132,13 @@ export const ChatPage: React.FC = () => {
       if (error) throw new Error(error.message);
 
       const assistantMessageContent = data.response || "Sorry, I couldn't generate a response.";
-      await dbService.addChatMessage({ session_id: activeSession.id, role: 'assistant', content: assistantMessageContent });
-      setMessages(prev => [...prev, { id: Date.now().toString() + '-ai', session_id: activeSession.id, role: 'assistant', content: assistantMessageContent, created_at: new Date().toISOString() }]);
+      const assistantMessage = await dbService.addChatMessage({ session_id: activeSession.id, role: 'assistant', content: assistantMessageContent });
+      setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Failed to get AI response:', error);
       const errorMessageContent = "I'm sorry, I encountered an error. Please try again.";
-      await dbService.addChatMessage({ session_id: activeSession.id, role: 'assistant', content: errorMessageContent });
-      setMessages(prev => [...prev, { id: 'error', session_id: activeSession.id, role: 'assistant', content: errorMessageContent, created_at: new Date().toISOString() }]);
+      const errorMsg = await dbService.addChatMessage({ session_id: activeSession.id, role: 'assistant', content: errorMessageContent });
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
     }
@@ -147,6 +147,9 @@ export const ChatPage: React.FC = () => {
   const handleDeleteSession = async (sessionId: string) => {
     if (!confirm("Are you sure you want to delete this chat?")) return;
     await dbService.deleteChatSession(sessionId);
+    if (activeSession?.id === sessionId) {
+      setActiveSession(null);
+    }
     await loadSessions();
   };
 
@@ -157,7 +160,6 @@ export const ChatPage: React.FC = () => {
     }
   };
 
-  // The rest of the JSX remains largely the same but with the new delete button
   return (
     <div className="flex h-[calc(100vh-4rem)]">
       {/* Sidebar for Chat History */}
@@ -191,23 +193,22 @@ export const ChatPage: React.FC = () => {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-        {/* ... (rest of the main chat area JSX is the same as before) ... */}
         <div className="p-6 border-b">
           <h1 className="text-xl font-bold text-gray-900 flex items-center">
             <Bot className="h-6 w-6 text-quickcart-600 mr-3" />
             Stella - AI Business Assistant
           </h1>
           <p className="text-gray-600 mt-1">
-            {activeSession ? `Chatting in: ${activeSession.title}` : "Start a new chat to begin."}
+            {activeSession ? `${activeSession.title}` : "Start a new chat to begin."}
           </p>
         </div>
 
         <Card className="flex-1 flex flex-col rounded-none border-none">
           <CardContent className="flex-1 flex flex-col p-0">
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((message, index) => (
+              {messages.map((message) => (
                 <div
-                  key={index}
+                  key={message.id}
                   className={`flex items-start gap-3 max-w-3xl ${message.role === 'user' ? 'justify-end ml-auto' : 'justify-start'}`}
                 >
                   {message.role === 'assistant' && (
