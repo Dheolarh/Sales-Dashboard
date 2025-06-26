@@ -12,7 +12,7 @@ import {
   Save,
   RefreshCw
 } from 'lucide-react'
-import { useLocalStorage } from '../../hooks/useLocalStorage'
+import { useSettingsContext, UserPreferencesData } from '../../hooks/SettingsContext'; // --- MODIFIED ---
 import { useToast } from '../../hooks/useToast'
 
 interface UserPreferences {
@@ -66,57 +66,56 @@ const defaultPreferences: UserPreferences = {
 }
 
 export const UserPreferences: React.FC = () => {
-  const [preferences, setPreferences] = useLocalStorage('user-preferences', defaultPreferences)
-  const [saving, setSaving] = useState(false)
-  const { addToast } = useToast()
+  const { preferences, setPreferences } = useSettingsContext();
+  const [saving, setSaving] = useState(false);
+  const { addToast } = useToast();
 
-  const updatePreference = (section: keyof UserPreferences, key: string, value: any) => {
+  const updatePreference = (section: keyof UserPreferencesData, key: string, value: any) => {
     setPreferences(prev => ({
       ...prev,
       [section]: {
-        ...prev[section],
+        ...(prev[section] as Record<string, any>),
         [key]: value
       }
-    }))
-  }
+    }));
+  };
 
-  const updateTopLevelPreference = (key: keyof UserPreferences, value: any) => {
+  const updateTopLevelPreference = (key: keyof UserPreferencesData, value: any) => {
     setPreferences(prev => ({
       ...prev,
       [key]: value
-    }))
-  }
+    }));
+  };
 
   const savePreferences = async () => {
-    setSaving(true)
+    setSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
+      // The useLocalStorage hook already saves on change, so this is just for UX feedback
+      await new Promise(resolve => setTimeout(resolve, 1000));
       addToast({
         type: 'success',
         title: 'Preferences Saved',
         message: 'Your preferences have been updated successfully.'
-      })
+      });
     } catch (error) {
       addToast({
         type: 'error',
         title: 'Save Failed',
         message: 'Failed to save preferences. Please try again.'
-      })
+      });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const resetToDefaults = () => {
-    setPreferences(defaultPreferences)
+    setPreferences(defaultPreferences);
     addToast({
       type: 'info',
       title: 'Preferences Reset',
       message: 'All preferences have been reset to default values.'
-    })
-  }
+    });
+  };
 
   return (
     <div className="space-y-6">

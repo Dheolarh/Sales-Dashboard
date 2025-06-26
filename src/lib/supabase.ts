@@ -151,6 +151,38 @@ export interface ActivityLog {
 
 // Database service functions
 export const dbService = {
+
+  async getSystemSettings() {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('*');
+
+    if (error) throw error;
+
+    const config = data.reduce((acc, setting) => {
+      acc[setting.key] = setting.value;
+      return acc;
+    }, {} as Record<string, any>);
+
+    return config;
+  },
+
+  // --- NEW: Function to update all system settings ---
+  async updateSystemSettings(config: Record<string, any>) {
+    const settingsToUpsert = Object.entries(config).map(([key, value]) => ({
+      key,
+      value,
+      updated_at: new Date().toISOString()
+    }));
+
+    const { data, error } = await supabase
+      .from('system_settings')
+      .upsert(settingsToUpsert, { onConflict: 'key' });
+
+    if (error) throw error;
+    return data;
+  },
+  
   // Companies
   async getCompanies() {
     const { data, error } = await supabase

@@ -1,56 +1,57 @@
-import React, { useState } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card'
-import { Button } from '../ui/Button'
-import { Input } from '../ui/Input'
-import { 
-  Settings, 
-  Database, 
-  Shield, 
-  Zap, 
-  Mail, 
+import React, { useState, useEffect } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import {
+  Settings,
+  Database,
+  Shield,
+  Zap,
+  Mail,
   Globe,
   Save,
   TestTube,
   AlertTriangle,
-  CheckCircle
-} from 'lucide-react'
-import { useToast } from '../../hooks/useToast'
-import { StatusIndicator } from '../ui/StatusIndicator'
+} from 'lucide-react';
+import { useToast } from '../../hooks/useToast';
+import { StatusIndicator } from '../ui/StatusIndicator';
+import { dbService } from '../../lib/supabase'; // --- NEW ---
+import { LoadingSpinner } from '../ui/LoadingSpinner'; // --- NEW ---
 
 interface SystemConfig {
   database: {
-    connectionTimeout: number
-    maxConnections: number
-    backupFrequency: string
-    retentionDays: number
-  }
+    connectionTimeout: number;
+    maxConnections: number;
+    backupFrequency: string;
+    retentionDays: number;
+  };
   security: {
-    sessionTimeout: number
-    maxLoginAttempts: number
-    passwordMinLength: number
-    requireMFA: boolean
-    allowedDomains: string[]
-  }
+    sessionTimeout: number;
+    maxLoginAttempts: number;
+    passwordMinLength: number;
+    requireMFA: boolean;
+    allowedDomains: string[];
+  };
   performance: {
-    cacheTimeout: number
-    maxRequestSize: number
-    rateLimitPerMinute: number
-    enableCompression: boolean
-  }
+    cacheTimeout: number;
+    maxRequestSize: number;
+    rateLimitPerMinute: number;
+    enableCompression: boolean;
+  };
   notifications: {
-    smtpHost: string
-    smtpPort: number
-    smtpUser: string
-    smtpPassword: string
-    fromEmail: string
-    enableSSL: boolean
-  }
+    smtpHost: string;
+    smtpPort: number;
+    smtpUser: string;
+    smtpPassword: string;
+    fromEmail: string;
+    enableSSL: boolean;
+  };
   ai: {
-    scanInterval: number
-    confidenceThreshold: number
-    autoResolveThreshold: number
-    enablePredictiveAnalytics: boolean
-  }
+    scanInterval: number;
+    confidenceThreshold: number;
+    autoResolveThreshold: number;
+    enablePredictiveAnalytics: boolean;
+  };
 }
 
 const defaultConfig: SystemConfig = {
@@ -87,66 +88,87 @@ const defaultConfig: SystemConfig = {
     autoResolveThreshold: 95,
     enablePredictiveAnalytics: true
   }
-}
+};
 
 export const SystemSettings: React.FC = () => {
-  const [config, setConfig] = useState<SystemConfig>(defaultConfig)
-  const [saving, setSaving] = useState(false)
-  const [testing, setTesting] = useState<string | null>(null)
-  const { addToast } = useToast()
+  const [loading, setLoading] = useState(true); // --- MODIFIED ---
+  const [config, setConfig] = useState<SystemConfig>(defaultConfig);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState<string | null>(null);
+  const { addToast } = useToast();
+
+  // --- NEW: useEffect to load settings from the database ---
+  useEffect(() => {
+    const loadSettings = async () => {
+      setLoading(true);
+      try {
+        const fetchedSettings = await dbService.getSystemSettings();
+        const mergedConfig = { ...defaultConfig, ...fetchedSettings };
+        setConfig(mergedConfig);
+      } catch (error) {
+        console.error("Failed to load system settings:", error);
+        addToast({
+          type: 'error',
+          title: 'Load Failed',
+          message: 'Could not load system settings from the database.',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSettings();
+  }, [addToast]);
 
   const updateConfig = (section: keyof SystemConfig, key: string, value: any) => {
     setConfig(prev => ({
       ...prev,
       [section]: {
-        ...prev[section],
+        ...(prev[section] as Record<string, any>),
         [key]: value
       }
-    }))
-  }
+    }));
+  };
 
+  // --- MODIFIED: The saveConfig function now makes a real API call ---
   const saveConfig = async () => {
-    setSaving(true)
+    setSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
+      await dbService.updateSystemSettings(config);
       addToast({
         type: 'success',
         title: 'Settings Saved',
         message: 'System configuration has been updated successfully.'
-      })
+      });
     } catch (error) {
       addToast({
         type: 'error',
         title: 'Save Failed',
         message: 'Failed to save system settings. Please try again.'
-      })
+      });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const testConnection = async (type: string) => {
-    setTesting(type)
+    setTesting(type);
     try {
-      // Simulate connection test
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      addToast({
-        type: 'success',
-        title: 'Connection Test Successful',
-        message: `${type} connection is working properly.`
-      })
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      addToast({ type: 'success', title: 'Connection Test Successful', message: `${type} connection is working properly.` });
     } catch (error) {
-      addToast({
-        type: 'error',
-        title: 'Connection Test Failed',
-        message: `Failed to connect to ${type}. Please check your settings.`
-      })
+      addToast({ type: 'error', title: 'Connection Test Failed', message: `Failed to connect to ${type}. Please check your settings.` });
     } finally {
-      setTesting(null)
+      setTesting(null);
     }
+  };
+
+  // --- NEW: Loading state ---
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <LoadingSpinner text="Loading System Settings..." />
+      </div>
+    );
   }
 
   return (
