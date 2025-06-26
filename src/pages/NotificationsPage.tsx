@@ -1,38 +1,27 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { Bell, Check, Eye, Trash2 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { dbService, supabase, type Notification } from '../lib/supabase';
+import { supabase, type Notification } from '../lib/supabase';
 import { useAuthContext } from '../hooks/AuthContext';
 import { formatDateTime } from '../utils/format';
+
+interface NotificationsContext {
+  notifications: Notification[];
+  setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
+  loadingNotifications: boolean;
+  loadNotifications: () => Promise<void>;
+}
 
 export const NotificationsPage: React.FC = () => {
     const { admin } = useAuthContext();
     const navigate = useNavigate();
-    const [notifications, setNotifications] = useState<Notification[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { notifications, setNotifications, loadingNotifications, loadNotifications } = useOutletContext<NotificationsContext>();
     const [showClearConfirm, setShowClearConfirm] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-
-    const loadNotifications = useCallback(async () => {
-        if (!admin) return;
-        setLoading(true);
-        try {
-            const data = await dbService.getNotifications(admin.id);
-            setNotifications(data);
-        } catch (error) {
-            console.error("Failed to load notifications:", error);
-        } finally {
-            setLoading(false);
-        }
-    }, [admin]);
-
-    useEffect(() => {
-        loadNotifications();
-    }, [loadNotifications]);
 
     const handleMarkAsRead = async (id: string) => {
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
@@ -53,7 +42,7 @@ export const NotificationsPage: React.FC = () => {
         setIsProcessing(true);
         if (!admin) return;
         await supabase.from('notifications').delete().eq('admin_id', admin.id);
-        setNotifications([]);
+        await loadNotifications(); // Reload from the source
         setShowClearConfirm(false);
         setIsProcessing(false);
     };
@@ -62,7 +51,6 @@ export const NotificationsPage: React.FC = () => {
         if (notification.related_error_id) {
             navigate('/errors');
         }
-        // Add other navigation logic here for other notification types
     };
 
     return (
@@ -89,7 +77,7 @@ export const NotificationsPage: React.FC = () => {
                 <Card>
                     <CardContent className="p-0">
                         <div className="divide-y divide-gray-200">
-                            {loading ? <p className="p-6">Loading...</p> :
+                            {loadingNotifications ? <p className="p-6">Loading...</p> :
                                 notifications.length === 0 ? <p className="p-6 text-center text-gray-500">You have no notifications.</p> :
                                     notifications.map(notification => (
                                         <div key={notification.id} className={`p-4 flex items-start justify-between ${!notification.is_read ? 'bg-blue-50' : 'bg-white'}`}>

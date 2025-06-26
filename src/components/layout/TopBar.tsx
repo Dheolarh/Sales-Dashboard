@@ -10,10 +10,10 @@ import { useSettingsContext } from '../../hooks/SettingsContext';
 // Defines the props the component now receives from DashboardLayout
 interface TopBarProps {
   notifications: Notification[];
-  setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>; // --- ADDED ---
+  setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications}) => {
+export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications }) => {
   const { admin, logout } = useAuthContext();
   const { preferences } = useSettingsContext();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -24,7 +24,6 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications}
     return () => clearInterval(timer);
   }, []);
 
-  // The unread count is now correctly calculated from props
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const openStore = () => {
@@ -59,7 +58,7 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications}
               </span>
             </div>
 
-             <div className="relative">
+            <div className="relative">
               <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
@@ -95,13 +94,11 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications}
           </div>
         </div>
       </header>
-
-      {/* This is the critical part that passes the refresh function down */}
       <NotificationCenter
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
         notifications={notifications}
-        setNotifications={setNotifications} // --- MODIFIED: Pass the function down ---
+        setNotifications={setNotifications}
       />
     </>
   )

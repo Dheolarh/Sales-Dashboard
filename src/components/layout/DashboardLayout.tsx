@@ -36,11 +36,10 @@ export const DashboardLayout: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopBar
           notifications={notifications}
-          loading={loadingNotifications}
-          setNotifications={setNotifications} 
+          setNotifications={setNotifications}
         />
         <main className="flex-1 overflow-y-auto">
-          <Outlet />
+          <Outlet context={{ notifications, setNotifications, loadingNotifications, loadNotifications }} />
         </main>
       </div>
     </div>
