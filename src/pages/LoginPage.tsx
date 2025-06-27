@@ -1,31 +1,39 @@
-import React, { useState, useEffect } from 'react'
-import { Header } from '../components/layout/Header'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
-import { Input } from '../components/ui/Input'
-import { Button } from '../components/ui/Button'
-import { detectLocation, getCurrentUTCTime, type LocationData } from '../utils/location'
-import { useAuthContext } from '../hooks/AuthContext' // 1. Change this import
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // 1. Import useNavigate
+import { Header } from '../components/layout/Header';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
+import { Input } from '../components/ui/Input';
+import { Button } from '../components/ui/Button';
+import { detectLocation, getCurrentUTCTime, type LocationData } from '../utils/location';
+import { useAuthContext } from '../hooks/AuthContext';
 
 export const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [location, setLocation] = useState<LocationData | null>(null)
-  const { login, loading, error } = useAuthContext() // 2. Change this hook call
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [location, setLocation] = useState<LocationData | null>(null);
+  const { admin, login, loading, error } = useAuthContext();
+  const navigate = useNavigate(); // 2. Initialize the navigate function
 
   useEffect(() => {
-    // Detect user location on page load
-    detectLocation().then(setLocation)
-  }, [])
+    // 3. If the user is already logged in, redirect them immediately.
+    if (admin) {
+      navigate('/dashboard', { replace: true });
+    }
+    detectLocation().then(setLocation);
+  }, [admin, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
+    e.preventDefault();
     try {
-      await login(email, password)
+      const loggedInAdmin = await login(email, password);
+      // 4. On successful login, navigate to the dashboard.
+      if (loggedInAdmin) {
+        navigate('/dashboard', { replace: true });
+      }
     } catch (err) {
-      // Error is handled by useAuth hook
+      // Error is already handled by the useAuth hook's state.
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-quickcart-50 to-quickcart-100">
@@ -93,5 +101,5 @@ export const LoginPage: React.FC = () => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};

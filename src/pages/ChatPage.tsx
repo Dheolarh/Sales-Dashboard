@@ -25,13 +25,30 @@ export const ChatPage: React.FC = () => {
   const [isSidebarLoading, setIsSidebarLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // --- MODIFIED: Call the secure edge function to create a new chat ---
   const handleNewChat = useCallback(async () => {
     if (!admin) return null;
-    const newSession = await dbService.createChatSession(admin.id, `New Chat`);
-    setSessions(prev => [newSession, ...prev]);
-    setActiveSession(newSession);
-    return newSession;
+    try {
+      const { data: newSession, error } = await supabase.functions.invoke('ai-chat', {
+        body: {
+          task: 'create_chat_session',
+          user: { id: admin.id },
+          title: 'New Chat'
+        },
+      });
+
+      if (error) throw error;
+
+      setSessions(prev => [newSession, ...prev]);
+      setActiveSession(newSession);
+      return newSession;
+    } catch (error) {
+      console.error("Failed to create new chat session:", error);
+      // You could show a toast notification here to the user
+      return null;
+    }
   }, [admin]);
+
 
   const loadSessions = useCallback(async () => {
     if (!admin) return;
@@ -58,7 +75,7 @@ export const ChatPage: React.FC = () => {
     if (admin) {
       loadSessions();
     }
-  }, [admin]);
+  }, [admin, loadSessions]);
 
   useEffect(() => {
     const fetchMessages = async () => {

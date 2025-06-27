@@ -16,7 +16,25 @@ interface User {
   name?: string;
 }
 
-// --- Tool and Action Implementations ---
+// --- NEW: Function to securely create a chat session ---
+async function createChatSession(supabaseAdmin: SupabaseClient, adminId: string, title: string) {
+  console.log(`Action called: createChatSession for admin ${adminId}`);
+  if (!adminId || !title) {
+    throw new Error("Admin ID and title are required to create a chat session.");
+  }
+  const { data, error } = await supabaseAdmin
+    .from('chat_sessions')
+    .insert({ admin_id: adminId, title })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error in createChatSession:", error);
+    throw new Error(`Failed to create chat session: ${error.message}`);
+  }
+  return data;
+}
+
 
 /**
  * REVISED: Securely processes a checkout, verifies prices, creates transactions,
@@ -143,12 +161,18 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { query, history, user, task, sessionId, cart } = await req.json();
+    const { query, history, user, task, sessionId, cart, title } = await req.json();
+    const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
     if (task === 'process_checkout') {
-      const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
       const checkoutResult = await processCheckout(supabaseAdmin, cart, user);
       return new Response(JSON.stringify(checkoutResult), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    
+    // --- NEW: Handle session creation task ---
+    if (task === 'create_chat_session') {
+      const newSession = await createChatSession(supabaseAdmin, user.id, title);
+      return new Response(JSON.stringify(newSession), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // This is the main AI chat logic
