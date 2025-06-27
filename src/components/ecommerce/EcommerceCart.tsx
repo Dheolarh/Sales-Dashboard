@@ -29,19 +29,33 @@ export const EcommerceCart: React.FC<EcommerceCartProps> = ({
   const [isProcessing, setIsProcessing] = useState(false)
   const [orderComplete, setOrderComplete] = useState(false)
 
+  // ... inside the EcommerceCart component
+
   const processCheckout = async () => {
-    // Don't calculate stock here. Just call the function.
-    const { error } = await supabase.functions.invoke('process-checkout', {
-      body: { cart }, // Send the cart to the secure function
+    setIsProcessing(true);
+    // Call the 'ai-chat' function and specify the task
+    const { error } = await supabase.functions.invoke('ai-chat', {
+      body: {
+        cart, // Send the cart data
+        task: 'process_checkout' // This tells the backend to run the checkout logic
+      },
     });
 
     if (error) {
       console.error("Checkout failed:", error);
+      alert(`Checkout failed: ${error.message}`); // Show error to user
     } else {
       console.log("Checkout successful!");
-      // Clear cart, show success message, etc.
+      setOrderComplete(true);
+      // Optional: clear the cart after a delay
+      setTimeout(() => {
+        window.location.reload(); // Reload to reflect changes
+      }, 3000);
     }
+    setIsProcessing(false);
   };
+
+  // ...
 
   if (!isOpen) return null
 
