@@ -34,7 +34,6 @@ export const ChatPage: React.FC = () => {
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
-      // session_id is no longer needed but kept for type compatibility.
       session_id: 'local_session',
       role: 'user',
       content: query,
@@ -45,19 +44,16 @@ export const ChatPage: React.FC = () => {
     setInputValue('');
     setIsLoading(true);
 
-    // We no longer save the user's message to the database.
-
-    // The history for the AI is built from the current message list.
     const historyForAPI = [...messages, userMessage].map(m => ({
-      role: m.role as 'user' | 'model',
+      role: m.role === 'assistant' ? 'model' : 'user', // Correctly map the role
       parts: [{ text: m.content }]
     }));
 
     try {
-      // The call to the edge function remains the same.
       const { data, error } = await supabase.functions.invoke('ai-chat', {
         body: { query, history: historyForAPI, user: { id: admin.id, name: admin.full_name } },
       });
+
       if (error) throw new Error(error.message);
 
       const assistantMessageContent = data.response || "Sorry, I couldn't generate a response.";
@@ -68,8 +64,7 @@ export const ChatPage: React.FC = () => {
         content: assistantMessageContent,
         created_at: new Date().toISOString()
       };
-      
-      // We no longer save the assistant's message to the database.
+
       setMessages(prev => [...prev, assistantMessage]);
 
     } catch (error) {
@@ -99,7 +94,7 @@ export const ChatPage: React.FC = () => {
     // The main container now takes up the full space.
     <div className="flex h-[calc(100vh-4rem)]">
       {/* The entire chat session sidebar has been removed. */}
-      
+
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         <div className="p-6 border-b">
