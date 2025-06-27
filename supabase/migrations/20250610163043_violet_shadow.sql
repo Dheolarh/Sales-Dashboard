@@ -1,28 +1,5 @@
 /*
-  # QuickCart Sales Dashboard Database Schema
-
-  1. New Tables
-    - `companies` - Store supplier/manufacturer information
-    - `categories` - Product categories with hierarchical structure
-    - `products` - Product catalog with pricing and inventory
-    - `admins` - Dashboard administrators
-    - `access_logs` - Login tracking and monitoring
-    - `transactions` - Sales transactions from ecommerce
-    - `inventory_logs` - Product inventory changes tracking
-    - `error_logs` - AI-detected discrepancies and errors
-    - `notifications` - System notifications for admins
-
-  2. Security
-    - Enable RLS on all tables
-    - Add policies for authenticated admin access
-    - Separate read-only access for AI monitoring
-
-  3. Features
-    - UUID primary keys for all tables
-    - Proper foreign key relationships
-    - Timestamps for all records
-    - Money flow tracking
-    - Inventory mismatch detection support
+  # QuickCart Sales Dashboard Database Schema (Consolidated)
 */
 
 -- Companies table
@@ -146,12 +123,27 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at timestamptz DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS chat_sessions ();
+-- Chat Sessions Table (Corrected Schema)
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id uuid REFERENCES admins(id) NOT NULL,
+  title text NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- Chat Messages Table (Corrected Schema)
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id uuid REFERENCES chat_sessions(id) ON DELETE CASCADE NOT NULL,
+  role text NOT NULL, -- 'user' or 'assistant'
+  content text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Other tables
 CREATE TABLE IF NOT EXISTS activity_logs ();
-CREATE TABLE IF NOT EXISTS chat_messages ();
 CREATE TABLE IF NOT EXISTS system_settings ();
-
-
 
 -- Enable Row Level Security
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
@@ -167,8 +159,6 @@ ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
-
-
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_products_company_id ON products(company_id);
