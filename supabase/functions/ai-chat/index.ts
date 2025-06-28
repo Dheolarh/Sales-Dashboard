@@ -5,7 +5,6 @@ import { corsHeaders } from '../_shared/cors.ts';
 const genAI = new GoogleGenerativeAI(Deno.env.get('GEMINI_API_KEY')!);
 
 // --- 1. INTENT CLASSIFIER ---
-// Determines if the user's query is conversational or data-related.
 class IntentClassifier {
   private model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
 
@@ -32,15 +31,12 @@ class IntentClassifier {
       return 'conversational';
     } catch (e) {
       console.error("Intent classification failed:", e);
-      // Default to data_query on failure to be safe
-      return 'data_query';
+      return 'data_query'; // Default to data_query on failure
     }
   }
 }
 
-
 // --- 2. CONVERSATIONAL RESPONDER ---
-// Handles non-data related parts of the conversation.
 class ConversationalResponder {
   private model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
 
@@ -67,9 +63,7 @@ class ConversationalResponder {
   }
 }
 
-
-// --- 3. DYNAMIC QUERY ENGINE ---
-// Dynamically generates and executes SQL based on a deep analysis of the user query and schema.
+// --- 3. DYNAMIC QUERY ENGINE (REVISED & STRICTER) ---
 class DynamicQueryEngine {
   private model = genAI.getGenerativeModel({
     model: 'gemini-1.5-pro-latest',
@@ -89,47 +83,56 @@ class DynamicQueryEngine {
       console.error('Schema analysis failed:', error);
       return 'Database schema information unavailable';
     }
-    // Simplified schema string for the prompt
-    return data.map((table: any) => `Table \`${table.table_name}\`: Columns: ${table.columns.map((c: any) => c.column_name).join(', ')}`).join('\n');
+    // Provide a richer schema string for the prompt
+    return data.map((table: any) =>
+      `Table \`${table.table_name}\`:\n` +
+      `  - Description: ${table.description || 'No description available.'}\n` +
+      `  - Columns: ${table.columns.map((c: any) => `${c.column_name} (${c.data_type})`).join(', ')}\n`
+    ).join('\n');
   }
 
   async generateAndExecute(query: string, history: any[]): Promise<string> {
     const schema = await this.getSchema();
     const prompt = `
-      You are a world-class data analyst who can write perfect PostgreSQL queries.
-      Your task is to answer the user's question by generating a single, valid PostgreSQL query based on the provided database schema.
+      You are a hyper-intelligent data analyst AI. Your ONLY task is to answer the user's question by generating a valid PostgreSQL query against the provided database schema. You must follow all rules strictly.
 
       DATABASE SCHEMA:
       ---
       ${schema}
       ---
 
-      CONVERSATION HISTORY:
-      ---
-      ${JSON.stringify(history, null, 2)}
-      ---
-
       USER'S QUESTION: "${query}"
 
-      Follow these steps to generate the response:
-      1.  **Analyze the Request**: Understand what the user is asking for. Identify key metrics, dimensions, and filters.
-      2.  **Map to Schema**: Map the user's request to the available tables and columns in the schema. Think about synonyms (e.g., "items" -> "products", "sales" -> "transactions", "revenue" -> "total_amount").
-      3.  **Construct SQL**: Write a single, valid PostgreSQL SELECT query to answer the question.
-          - Use \`ilike\` for case-insensitive text matching.
-          - For dates, use functions like \`NOW()\` and \`INTERVAL\`. For "last week", use a construction like \`transaction_time >= date_trunc('week', NOW() - interval '1 week') AND transaction_time < date_trunc('week', NOW())\`.
-          - Always join tables when necessary (e.g., \`transactions\` to \`products\`).
-          - Add a \`LIMIT 20\` to your query unless the user asks for a different limit.
-      4.  **Final Response**: Format your final output as a single JSON object containing two keys: "thought_process" and "sql".
-          - "thought_process": A brief, step-by-step explanation of how you understood the request and constructed the query.
-          - "sql": The complete, valid PostgreSQL query string.
+      **RULES:**
+      1.  **NEVER** use a table or column that is NOT explicitly listed in the DATABASE SCHEMA. Do not guess or hallucinate names.
+      2.  "Stock" or "inventory" refers to the \`current_stock\` column in the \`products\` table.
+      3.  "Sales" or "revenue" refer to the \`transactions\` table, specifically the \`total_amount\` column.
+      4.  "Items" or "goods" refer to the \`products\` table.
+      5.  For "last week", use a construction like: \`transaction_time >= date_trunc('week', NOW() - interval '1 week') AND transaction_time < date_trunc('week', NOW())\`.
+      6.  Always add a \`LIMIT 20\` to your query unless the user specifies a different limit.
 
-      Return ONLY the JSON object.
+      **RESPONSE FORMAT:**
+      Your output MUST be a single, valid JSON object with two keys: "thought_process" and "sql".
+
+      **Thought Process Steps (Must be followed):**
+      1.  **Analyze Request**: Briefly state what the user wants in simple terms.
+      2.  **Map to Schema**: Identify the exact tables and columns from the schema that are needed.
+      3.  **Construct SQL**: Write the initial SQL query based on the mapping.
+      4.  **Validate SQL**: Critically review the generated SQL. Ensure every table and column exists in the schema provided above. THIS IS THE MOST IMPORTANT STEP. If you use a column like 'stock_quantity' but the schema has 'current_stock', you MUST correct it.
+
+      **EXAMPLE for "What products are low in stock?"**
+      {
+        "thought_process": "1. Analyze Request: The user wants a list of products with low inventory.\\n2. Map to Schema: I need the 'name' and 'current_stock' columns from the 'products' table.\\n3. Construct SQL: I will write a SELECT query on the 'products' table, filtering where 'current_stock' is below a reasonable threshold, like 50.\\n4. Validate SQL: The table 'products' and columns 'name' and 'current_stock' all exist in the schema. The query is valid.",
+        "sql": "SELECT name, current_stock FROM products WHERE current_stock < 50 ORDER BY current_stock ASC LIMIT 20;"
+      }
+
+      Now, generate the response for the user's question. Return ONLY the JSON object.
     `;
 
     try {
       const result = await this.model.generateContent(prompt);
-      const responseJsonText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-      const responseJson = JSON.parse(responseJsonText);
+      const responseTextCleaned = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      const responseJson = JSON.parse(responseTextCleaned);
 
       const sql = responseJson.sql;
       const thoughtProcess = responseJson.thought_process;
