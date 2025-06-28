@@ -17,18 +17,16 @@ jobs:
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: 1.226.4
+          version: 1.226.4 # Or your desired version
 
-      # This is the corrected login step.
-      # We now use the --token flag to log in non-interactively.
       - name: Log in to Supabase
         run: supabase login --token ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - name: Link project
-        # This step should now succeed because the login step will have worked.
         env:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
 
+      # This is the corrected deployment step
       - name: Deploy Edge Functions
-        run: supabase functions deploy --no-verify-jwt
+        run: supabase functions deploy --no-verify-jwt --import-map ./supabase/functions/import_map.json
