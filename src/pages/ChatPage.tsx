@@ -1,33 +1,33 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Bot, User, Send, Sparkles, RefreshCw, Zap } from 'lucide-react';
+import { Bot, User, Send, Sparkles, RefreshCw, Search, BarChart, Code, Brain, ChevronDown } from 'lucide-react';
 import { useAuthContext } from '../hooks/AuthContext';
 import { supabase, type ChatMessage } from '../lib/supabase';
 import ReactMarkdown from 'react-markdown';
 
 const QUICK_ACTIONS = [
-  "What was our total revenue last month?",
-  "How many units of 'Coca-Cola Classic 330ml' are in stock?",
-  "Update stock for 'Pringles Original 165g' to 500 units.",
-  "What were the total sales for 'Sony PlayStation 5 Console'?",
+  "What were our top selling items last week?",
+  "Show me current logged-in users",
+  "What products are low in stock?",
+  "Revenue by product category"
 ];
 
 export const ChatPage: React.FC = () => {
   const { admin } = useAuthContext();
-  // State is now simplified to only hold the messages for the current conversation.
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Automatically scroll to the latest message.
+  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  // The send message handler is now much simpler.
+  // Handle message sending
   const handleSendMessage = async (messageText?: string) => {
     const query = (messageText || inputValue).trim();
     if (!query || isLoading || !admin) return;
@@ -44,37 +44,35 @@ export const ChatPage: React.FC = () => {
     setInputValue('');
     setIsLoading(true);
 
-    const historyForAPI = [...messages, userMessage].map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user', // Correctly map the role
-      parts: [{ text: m.content }]
-    }));
-
     try {
       const { data, error } = await supabase.functions.invoke('ai-chat', {
-        body: { query, history: historyForAPI, user: { id: admin.id, name: admin.full_name } },
+        body: { 
+          query, 
+          history: messages.map(m => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }]
+          }))
+        },
       });
 
       if (error) throw new Error(error.message);
 
-      const assistantMessageContent = data.response || "Sorry, I couldn't generate a response.";
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         session_id: 'local_session',
         role: 'assistant',
-        content: assistantMessageContent,
+        content: data?.response || "Sorry, I couldn't generate a response.",
         created_at: new Date().toISOString()
       };
 
       setMessages(prev => [...prev, assistantMessage]);
 
     } catch (error) {
-      console.error('Failed to get AI response:', error);
-      const errorMessageContent = "I'm sorry, I encountered an error. Please try again.";
       const errorMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         session_id: 'local_session',
         role: 'assistant',
-        content: errorMessageContent,
+        content: "I'm sorry, I encountered an error. Please try again.",
         created_at: new Date().toISOString()
       };
       setMessages(prev => [...prev, errorMsg]);
@@ -83,6 +81,104 @@ export const ChatPage: React.FC = () => {
     }
   };
 
+  // Toggle section expansion
+  const toggleExpand = (id: string) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
+  // Render message content with expandable sections
+  const renderMessageContent = (message: ChatMessage) => {
+    if (message.role === 'user') {
+      return <ReactMarkdown className="prose max-w-none">{message.content}</ReactMarkdown>;
+    }
+
+    // Split assistant message into sections
+    const sections: string[] = message.content.split(/(🔍 |📊 |💻 |🧠 )/g).filter(Boolean) as string[];
+    let currentSection = '';
+    const output: string[] = [];
+    
+    for (const section of sections) {
+      if (['🔍', '📊', '💻', '🧠'].includes(section.trim())) {
+        if (currentSection) {
+          output.push(currentSection);
+          currentSection = '';
+        }
+      }
+      currentSection += section;
+    }
+    
+    // Add last section
+    if (currentSection) output.push(currentSection);
+    
+    return (
+      <div>
+        {output.map((section, index) => {
+          const type = section.match(/^(🔍 |📊 |💻 |🧠 )/)?.[0]?.trim() || 'text';
+          const content = section.replace(/^(🔍 |📊 |💻 |🧠 )/, '');
+          const sectionId = `${message.id}-${index}`;
+          const isExpanded = expandedItems.has(sectionId);
+          
+          return (
+            <div key={index} className="mb-3">
+              {type === 'text' ? (
+                <ReactMarkdown className="prose max-w-none">{section}</ReactMarkdown>
+              ) : (
+                <>
+                  <div 
+                    className="flex items-center cursor-pointer font-medium text-gray-700"
+                    onClick={() => toggleExpand(sectionId)}
+                  >
+                    <span className="mr-2">
+                      {type === '🔍' && <Search className="h-4 w-4 inline" />}
+                      {type === '📊' && <BarChart className="h-4 w-4 inline" />}
+                      {type === '💻' && <Code className="h-4 w-4 inline" />}
+                      {type === '🧠' && <Brain className="h-4 w-4 inline" />}
+                    </span>
+                    {type === '🔍' && 'Query'}
+                    {type === '📊' && 'Results'}
+                    {type === '💻' && 'SQL'}
+                    {type === '🧠' && 'Mapping'}
+                    <ChevronDown 
+                      className={`h-4 w-4 ml-2 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                    />
+                  </div>
+                  
+                  {isExpanded && (
+                    <div className="mt-2 ml-6">
+                      {type === '📊' ? (
+                        <pre className="bg-gray-50 p-3 rounded-md text-sm overflow-x-auto">
+                          {content}
+                        </pre>
+                      ) : type === '💻' ? (
+                        <pre className="bg-gray-800 text-gray-100 p-3 rounded-md text-sm overflow-x-auto">
+                          {content}
+                        </pre>
+                      ) : type === '🧠' ? (
+                        <pre className="bg-blue-50 p-3 rounded-md text-sm overflow-x-auto">
+                          {content}
+                        </pre>
+                      ) : (
+                        <ReactMarkdown className="prose prose-sm max-w-none">
+                          {content}
+                        </ReactMarkdown>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Handle enter key
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -91,11 +187,7 @@ export const ChatPage: React.FC = () => {
   };
 
   return (
-    // The main container now takes up the full space.
     <div className="flex h-[calc(100vh-4rem)]">
-      {/* The entire chat session sidebar has been removed. */}
-
-      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         <div className="p-6 border-b">
           <h1 className="text-xl font-bold text-gray-900 flex items-center">
@@ -120,9 +212,11 @@ export const ChatPage: React.FC = () => {
                       <Sparkles className="h-4 w-4" />
                     </div>
                   )}
-                  <div className={`p-4 rounded-lg ${message.role === 'user' ? 'bg-quickcart-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
-                    <ReactMarkdown className="prose max-w-none">{message.content}</ReactMarkdown>
+                  
+                  <div className={`p-4 rounded-lg max-w-full ${message.role === 'user' ? 'bg-quickcart-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
+                    {renderMessageContent(message)}
                   </div>
+                  
                   {message.role === 'user' && (
                     <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-quickcart-600 text-white">
                       <User className="h-4 w-4" />
@@ -130,6 +224,7 @@ export const ChatPage: React.FC = () => {
                   )}
                 </div>
               ))}
+              
               {isLoading && (
                 <div className="flex items-start gap-3 max-w-3xl justify-start">
                   <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white">
@@ -147,16 +242,23 @@ export const ChatPage: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* The quick actions bar is shown when the chat is empty. */}
             {messages.length === 0 && !isLoading && (
               <div className="p-4 border-t">
                 <div className="flex items-center gap-2 mb-2">
-                  <Zap className="h-4 w-4 text-yellow-500" />
+                  <Sparkles className="h-4 w-4 text-yellow-500" />
                   <h4 className="text-sm font-medium">Try asking:</h4>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {QUICK_ACTIONS.map(q => (
-                    <Button key={q} size="sm" variant="outline" onClick={() => handleSendMessage(q)}>{q}</Button>
+                    <Button 
+                      key={q} 
+                      size="sm" 
+                      variant="outline" 
+                      className="text-left whitespace-normal h-auto py-2"
+                      onClick={() => handleSendMessage(q)}
+                    >
+                      {q}
+                    </Button>
                   ))}
                 </div>
               </div>
