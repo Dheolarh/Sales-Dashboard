@@ -1,292 +1,206 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, CardContent } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Bot, User, Send, Sparkles, RefreshCw, Search, BarChart, Code, Brain, ChevronDown } from 'lucide-react';
-import { useAuthContext } from '../hooks/AuthContext';
-import { supabase, type ChatMessage } from '../lib/supabase';
-import ReactMarkdown from 'react-markdown';
+import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from 'npm:@google/generative-ai@0.15.0';
+import { corsHeaders } from '../_shared/cors.ts';
 
-const QUICK_ACTIONS = [
-  "What were our top selling items last week?",
-  "Show me current logged-in users",
-  "What products are low in stock?",
-  "Revenue by product category"
-];
+const genAI = new GoogleGenerativeAI(Deno.env.get('GEMINI_API_KEY')!);
 
-export const ChatPage: React.FC = () => {
-  const { admin } = useAuthContext();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputValue, setInputValue] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+// --- 1. INTENT CLASSIFIER ---
+// Determines if the user's query is conversational or data-related.
+class IntentClassifier {
+  private model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
 
-  // Scroll to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+  async classify(query: string, history: any[]): Promise<'conversational' | 'data_query'> {
+    const prompt = `
+      You are an intent classifier for a business AI assistant.
+      Your task is to determine if the user's query is a general conversation or a request for data from a database.
 
-  // Handle message sending
-  const handleSendMessage = async (messageText?: string) => {
-    const query = (messageText || inputValue).trim();
-    if (!query || isLoading || !admin) return;
+      - **Conversational**: Greetings, thank you, how are you, general questions not related to business data.
+      - **Data Query**: Questions about sales, products, customers, revenue, inventory, etc.
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      session_id: 'local_session',
-      role: 'user',
-      content: query,
-      created_at: new Date().toISOString()
-    };
+      Conversation History:
+      ${JSON.stringify(history, null, 2)}
 
-    setMessages(prev => [...prev, userMessage]);
-    setInputValue('');
-    setIsLoading(true);
+      User Query: "${query}"
+
+      Based on the query and history, is this 'conversational' or a 'data_query'?
+      Return ONLY the classification.
+    `;
+    try {
+      const result = await this.model.generateContent(prompt);
+      const classification = result.response.text().trim().toLowerCase();
+      if (classification.includes('data_query')) return 'data_query';
+      return 'conversational';
+    } catch (e) {
+      console.error("Intent classification failed:", e);
+      // Default to data_query on failure to be safe
+      return 'data_query';
+    }
+  }
+}
+
+
+// --- 2. CONVERSATIONAL RESPONDER ---
+// Handles non-data related parts of the conversation.
+class ConversationalResponder {
+  private model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
+
+  async generateResponse(query: string, history: any[]): Promise<string> {
+    const prompt = `
+      You are Stella, a friendly and helpful AI business assistant.
+      The user is having a general conversation with you. Respond naturally and helpfully.
+      DO NOT try to query a database or generate SQL.
+
+      Conversation History:
+      ${JSON.stringify(history, null, 2)}
+
+      User's Latest Message: "${query}"
+
+      Your response:
+    `;
+    try {
+      const result = await this.model.generateContent(prompt);
+      return result.response.text();
+    } catch (e) {
+      console.error("Conversational response failed:", e);
+      return "I'm sorry, I had trouble processing that. Could you try rephrasing?";
+    }
+  }
+}
+
+
+// --- 3. DYNAMIC QUERY ENGINE ---
+// Dynamically generates and executes SQL based on a deep analysis of the user query and schema.
+class DynamicQueryEngine {
+  private model = genAI.getGenerativeModel({
+    model: 'gemini-1.5-pro-latest',
+    safetySettings: [
+      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    ]
+  });
+
+  constructor(private supabase: SupabaseClient) {}
+
+  private async getSchema(): Promise<string> {
+    const { data, error } = await this.supabase.rpc('get_schema_info');
+    if (error) {
+      console.error('Schema analysis failed:', error);
+      return 'Database schema information unavailable';
+    }
+    // Simplified schema string for the prompt
+    return data.map((table: any) => `Table \`${table.table_name}\`: Columns: ${table.columns.map((c: any) => c.column_name).join(', ')}`).join('\n');
+  }
+
+  async generateAndExecute(query: string, history: any[]): Promise<string> {
+    const schema = await this.getSchema();
+    const prompt = `
+      You are a world-class data analyst who can write perfect PostgreSQL queries.
+      Your task is to answer the user's question by generating a single, valid PostgreSQL query based on the provided database schema.
+
+      DATABASE SCHEMA:
+      ---
+      ${schema}
+      ---
+
+      CONVERSATION HISTORY:
+      ---
+      ${JSON.stringify(history, null, 2)}
+      ---
+
+      USER'S QUESTION: "${query}"
+
+      Follow these steps to generate the response:
+      1.  **Analyze the Request**: Understand what the user is asking for. Identify key metrics, dimensions, and filters.
+      2.  **Map to Schema**: Map the user's request to the available tables and columns in the schema. Think about synonyms (e.g., "items" -> "products", "sales" -> "transactions", "revenue" -> "total_amount").
+      3.  **Construct SQL**: Write a single, valid PostgreSQL SELECT query to answer the question.
+          - Use \`ilike\` for case-insensitive text matching.
+          - For dates, use functions like \`NOW()\` and \`INTERVAL\`. For "last week", use a construction like \`transaction_time >= date_trunc('week', NOW() - interval '1 week') AND transaction_time < date_trunc('week', NOW())\`.
+          - Always join tables when necessary (e.g., \`transactions\` to \`products\`).
+          - Add a \`LIMIT 20\` to your query unless the user asks for a different limit.
+      4.  **Final Response**: Format your final output as a single JSON object containing two keys: "thought_process" and "sql".
+          - "thought_process": A brief, step-by-step explanation of how you understood the request and constructed the query.
+          - "sql": The complete, valid PostgreSQL query string.
+
+      Return ONLY the JSON object.
+    `;
 
     try {
-      const { data, error } = await supabase.functions.invoke('ai-chat', {
-        body: { 
-          query, 
-          history: messages.map(m => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }]
-          }))
-        },
-      });
+      const result = await this.model.generateContent(prompt);
+      const responseJsonText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      const responseJson = JSON.parse(responseJsonText);
 
-      if (error) throw new Error(error.message);
+      const sql = responseJson.sql;
+      const thoughtProcess = responseJson.thought_process;
 
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        session_id: 'local_session',
-        role: 'assistant',
-        content: data?.response || "Sorry, I couldn't generate a response.",
-        created_at: new Date().toISOString()
-      };
+      // Execute the generated SQL
+      const { data: queryData, error: queryError } = await this.supabase.rpc('execute_sql', { query: sql });
 
-      setMessages(prev => [...prev, assistantMessage]);
+      // Format the final response for the user
+      let responseText = `🧠 **Thought Process:**\n${thoughtProcess}\n\n`;
+      responseText += `💻 **Executed SQL:**\n\`\`\`sql\n${sql}\n\`\`\`\n\n`;
 
-    } catch (error) {
-      const errorMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        session_id: 'local_session',
-        role: 'assistant',
-        content: "I'm sorry, I encountered an error. Please try again.",
-        created_at: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, errorMsg]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Toggle section expansion
-  const toggleExpand = (id: string) => {
-    setExpandedItems(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) newSet.delete(id);
-      else newSet.add(id);
-      return newSet;
-    });
-  };
-
-  // Render message content with expandable sections
-  const renderMessageContent = (message: ChatMessage) => {
-    if (message.role === 'user') {
-      return <ReactMarkdown className="prose max-w-none">{message.content}</ReactMarkdown>;
-    }
-
-    // Split assistant message into sections
-    const sections: string[] = message.content.split(/(🔍 |📊 |💻 |🧠 )/g).filter(Boolean) as string[];
-    let currentSection = '';
-    const output: string[] = [];
-    
-    for (const section of sections) {
-      if (['🔍', '📊', '💻', '🧠'].includes(section.trim())) {
-        if (currentSection) {
-          output.push(currentSection);
-          currentSection = '';
+      if (queryError) {
+        responseText += `❌ **Execution Error:** ${queryError.message}\n\nThis might be because I made a mistake in the SQL query. Could you try rephrasing your question?`;
+      } else if (queryData?.error) {
+        responseText += `❌ **SQL Error:** ${queryData.error}\n\nThis usually means the generated query was invalid. I'm still learning the schema!`;
+      } else {
+        const resultData = Array.isArray(queryData) ? queryData : [];
+        responseText += `📊 **Returned ${resultData.length} rows:**\n\n`;
+        if (resultData.length > 0) {
+          responseText += "```json\n" + JSON.stringify(resultData, null, 2) + "\n```";
+        } else {
+          responseText += "The query ran successfully, but returned no results.";
         }
       }
-      currentSection += section;
+      return responseText;
+
+    } catch (e) {
+      console.error("Query generation/execution failed:", e);
+      return `I'm sorry, I encountered an error while trying to answer your question. The AI model may have returned an invalid response. Details: ${e.message}`;
     }
-    
-    // Add last section
-    if (currentSection) output.push(currentSection);
-    
-    return (
-      <div>
-        {output.map((section, index) => {
-          const type = section.match(/^(🔍 |📊 |💻 |🧠 )/)?.[0]?.trim() || 'text';
-          const content = section.replace(/^(🔍 |📊 |💻 |🧠 )/, '');
-          const sectionId = `${message.id}-${index}`;
-          const isExpanded = expandedItems.has(sectionId);
-          
-          return (
-            <div key={index} className="mb-3">
-              {type === 'text' ? (
-                <ReactMarkdown className="prose max-w-none">{section}</ReactMarkdown>
-              ) : (
-                <>
-                  <div 
-                    className="flex items-center cursor-pointer font-medium text-gray-700"
-                    onClick={() => toggleExpand(sectionId)}
-                  >
-                    <span className="mr-2">
-                      {type === '🔍' && <Search className="h-4 w-4 inline" />}
-                      {type === '📊' && <BarChart className="h-4 w-4 inline" />}
-                      {type === '💻' && <Code className="h-4 w-4 inline" />}
-                      {type === '🧠' && <Brain className="h-4 w-4 inline" />}
-                    </span>
-                    {type === '🔍' && 'Query'}
-                    {type === '📊' && 'Results'}
-                    {type === '💻' && 'SQL'}
-                    {type === '🧠' && 'Mapping'}
-                    <ChevronDown 
-                      className={`h-4 w-4 ml-2 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                    />
-                  </div>
-                  
-                  {isExpanded && (
-                    <div className="mt-2 ml-6">
-                      {type === '📊' ? (
-                        <pre className="bg-gray-50 p-3 rounded-md text-sm overflow-x-auto">
-                          {content}
-                        </pre>
-                      ) : type === '💻' ? (
-                        <pre className="bg-gray-800 text-gray-100 p-3 rounded-md text-sm overflow-x-auto">
-                          {content}
-                        </pre>
-                      ) : type === '🧠' ? (
-                        <pre className="bg-blue-50 p-3 rounded-md text-sm overflow-x-auto">
-                          {content}
-                        </pre>
-                      ) : (
-                        <ReactMarkdown className="prose prose-sm max-w-none">
-                          {content}
-                        </ReactMarkdown>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
+  }
+}
+
+// --- MAIN FUNCTION ---
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    const { query, history } = await req.json();
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
-  };
 
-  // Handle enter key
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
+    // 1. Classify intent
+    const classifier = new IntentClassifier();
+    const intent = await classifier.classify(query, history);
+
+    let responseText = "";
+
+    if (intent === 'conversational') {
+      // 2. Handle conversation
+      const responder = new ConversationalResponder();
+      responseText = await responder.generateResponse(query, history);
+    } else {
+      // 3. Handle data query
+      const engine = new DynamicQueryEngine(supabaseAdmin);
+      responseText = await engine.generateAndExecute(query, history);
     }
-  };
 
-  return (
-    <div className="flex h-[calc(100vh-4rem)]">
-      <div className="flex-1 flex flex-col">
-        <div className="p-6 border-b">
-          <h1 className="text-xl font-bold text-gray-900 flex items-center">
-            <Bot className="h-6 w-6 text-quickcart-600 mr-3" />
-            Stella - AI Business Assistant
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Your personal AI assistant. Start a conversation below.
-          </p>
-        </div>
+    return new Response(JSON.stringify({ response: responseText }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
 
-        <Card className="flex-1 flex flex-col rounded-none border-none">
-          <CardContent className="flex-1 flex flex-col p-0">
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex items-start gap-3 max-w-3xl ${message.role === 'user' ? 'justify-end ml-auto' : 'justify-start'}`}
-                >
-                  {message.role === 'assistant' && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white">
-                      <Sparkles className="h-4 w-4" />
-                    </div>
-                  )}
-                  
-                  <div className={`p-4 rounded-lg max-w-full ${message.role === 'user' ? 'bg-quickcart-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
-                    {renderMessageContent(message)}
-                  </div>
-                  
-                  {message.role === 'user' && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-quickcart-600 text-white">
-                      <User className="h-4 w-4" />
-                    </div>
-                  )}
-                </div>
-              ))}
-              
-              {isLoading && (
-                <div className="flex items-start gap-3 max-w-3xl justify-start">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white">
-                    <Sparkles className="h-4 w-4" />
-                  </div>
-                  <div className="p-4 rounded-lg bg-gray-100 text-gray-900">
-                    <div className="flex items-center space-x-1">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {messages.length === 0 && !isLoading && (
-              <div className="p-4 border-t">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="h-4 w-4 text-yellow-500" />
-                  <h4 className="text-sm font-medium">Try asking:</h4>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {QUICK_ACTIONS.map(q => (
-                    <Button 
-                      key={q} 
-                      size="sm" 
-                      variant="outline" 
-                      className="text-left whitespace-normal h-auto py-2"
-                      onClick={() => handleSendMessage(q)}
-                    >
-                      {q}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="border-t border-gray-200 p-4 bg-white">
-              <div className="flex items-center space-x-3">
-                <Input
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Ask Stella anything..."
-                  disabled={isLoading}
-                  className="flex-1"
-                  label=""
-                />
-                <Button
-                  onClick={() => handleSendMessage()}
-                  disabled={!inputValue.trim() || isLoading}
-                  className="w-24"
-                >
-                  {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4 mr-2" /> Send</>}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-};
+  } catch (error) {
+    const errorResponse = `❌ **Critical Error:** ${error.message || 'Unknown error'}\n\n`;
+    return new Response(JSON.stringify({ response: errorResponse }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500
+    });
+  }
+});
