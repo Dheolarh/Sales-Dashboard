@@ -1,9 +1,9 @@
 {
   "imports": {
-    "@langchain/google-genai": "https://esm.sh/@langchain/google-genai@0.0.22",
-    "langchain/sql_db": "https://esm.sh/langchain@0.2.10/sql_db",
-    "langchain/agents/toolkits/sql": "https://esm.sh/langchain@0.2.10/agents/toolkits/sql",
     "langchain/agents": "https://esm.sh/langchain@0.2.10/agents",
+    "langchain/agents/toolkits/sql": "https://esm.sh/langchain@0.2.10/agents/toolkits/sql",
+    "langchain/sql_db": "https://esm.sh/langchain@0.2.10/sql_db",
+    "@langchain/google-genai": "https://esm.sh/@langchain/google-genai@0.0.22",
     "typeorm": "https://esm.sh/typeorm@0.3.20/browser",
     "pg": "https://esm.sh/pg@8.12.0"
   }

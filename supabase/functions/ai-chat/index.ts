@@ -36,12 +36,10 @@ Deno.serve(async (req) => {
       },
     });
 
-    // THIS IS THE CORRECT METHOD
-    // It takes an object with the datasource nested under the `appDataSource` key.
     const db = await SqlDatabase.fromDataSourceParams({
       appDataSource: datasource,
     });
-
+    
     const toolkit = new SqlToolkit(db, llm);
     const agentExecutor: AgentExecutor = createSqlAgent(llm, toolkit);
 
@@ -59,7 +57,8 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error in function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    // This is the corrected error handling line
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json',
