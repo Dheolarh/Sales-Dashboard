@@ -1,4 +1,3 @@
-// Using the exact import paths you provided that work in your environment
 import 'https://esm.sh/reflect-metadata';
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { SqlDatabase } from "langchain/sql_db";
@@ -7,7 +6,6 @@ import { AgentExecutor } from "langchain/agents";
 import { DataSource } from "typeorm";
 
 Deno.serve(async (req) => {
-  // Standard CORS preflight handling
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
       headers: {
@@ -38,8 +36,8 @@ Deno.serve(async (req) => {
       },
     });
 
-    // THIS IS THE CORRECTED LINE:
-    // The method is `fromDataSourceParams` and it expects an object.
+    // THIS IS THE CORRECT METHOD
+    // It takes an object with the datasource nested under the `appDataSource` key.
     const db = await SqlDatabase.fromDataSourceParams({
       appDataSource: datasource,
     });
@@ -58,6 +56,7 @@ Deno.serve(async (req) => {
       },
       status: 200,
     });
+
   } catch (error) {
     console.error('Error in function:', error);
     return new Response(JSON.stringify({ error: error.message }), {
