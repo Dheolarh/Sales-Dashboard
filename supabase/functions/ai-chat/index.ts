@@ -57,7 +57,6 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error in function:', error);
-    // This is the corrected error handling line
     return new Response(JSON.stringify({ error: (error as Error).message }), {
       headers: {
         'Access-Control-Allow-Origin': '*',
