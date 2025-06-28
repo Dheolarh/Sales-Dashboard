@@ -63,9 +63,9 @@ class ConversationalResponder {
   }
 }
 
-// --- 3. DYNAMIC QUERY ENGINE (REVISED & STRICTER) ---
+// --- 3. DYNAMIC QUERY ENGINE (FINAL VERSION) ---
 class DynamicQueryEngine {
-  private model = genAI.getGenerativeModel({
+    private model = genAI.getGenerativeModel({
     model: 'gemini-1.5-pro-latest',
     safetySettings: [
       { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -83,7 +83,6 @@ class DynamicQueryEngine {
       console.error('Schema analysis failed:', error);
       return 'Database schema information unavailable';
     }
-    // Provide a richer schema string for the prompt
     return data.map((table: any) =>
       `Table \`${table.table_name}\`:\n` +
       `  - Description: ${table.description || 'No description available.'}\n` +
@@ -110,6 +109,7 @@ class DynamicQueryEngine {
       4.  "Items" or "goods" refer to the \`products\` table.
       5.  For "last week", use a construction like: \`transaction_time >= date_trunc('week', NOW() - interval '1 week') AND transaction_time < date_trunc('week', NOW())\`.
       6.  Always add a \`LIMIT 20\` to your query unless the user specifies a different limit.
+      7.  **DO NOT** include a semicolon (;) at the end of your SQL query.
 
       **RESPONSE FORMAT:**
       Your output MUST be a single, valid JSON object with two keys: "thought_process" and "sql".
@@ -117,13 +117,13 @@ class DynamicQueryEngine {
       **Thought Process Steps (Must be followed):**
       1.  **Analyze Request**: Briefly state what the user wants in simple terms.
       2.  **Map to Schema**: Identify the exact tables and columns from the schema that are needed.
-      3.  **Construct SQL**: Write the initial SQL query based on the mapping.
-      4.  **Validate SQL**: Critically review the generated SQL. Ensure every table and column exists in the schema provided above. THIS IS THE MOST IMPORTANT STEP. If you use a column like 'stock_quantity' but the schema has 'current_stock', you MUST correct it.
+      3.  **Construct SQL**: Write the initial SQL query based on the mapping, ensuring no semicolon at the end.
+      4.  **Validate SQL**: Critically review the generated SQL. Ensure every table and column exists in the schema provided above and that there is no trailing semicolon.
 
       **EXAMPLE for "What products are low in stock?"**
       {
-        "thought_process": "1. Analyze Request: The user wants a list of products with low inventory.\\n2. Map to Schema: I need the 'name' and 'current_stock' columns from the 'products' table.\\n3. Construct SQL: I will write a SELECT query on the 'products' table, filtering where 'current_stock' is below a reasonable threshold, like 50.\\n4. Validate SQL: The table 'products' and columns 'name' and 'current_stock' all exist in the schema. The query is valid.",
-        "sql": "SELECT name, current_stock FROM products WHERE current_stock < 50 ORDER BY current_stock ASC LIMIT 20;"
+        "thought_process": "1. Analyze Request: The user wants a list of products with low inventory.\\n2. Map to Schema: I need the 'name' and 'current_stock' columns from the 'products' table.\\n3. Construct SQL: I will write a SELECT query on the 'products' table, filtering where 'current_stock' is below a reasonable threshold, like 50.\\n4. Validate SQL: The table 'products' and columns 'name' and 'current_stock' all exist in the schema. The query is valid and has no trailing semicolon.",
+        "sql": "SELECT name, current_stock FROM products WHERE current_stock < 50 ORDER BY current_stock ASC LIMIT 20"
       }
 
       Now, generate the response for the user's question. Return ONLY the JSON object.
@@ -131,13 +131,15 @@ class DynamicQueryEngine {
 
     try {
       const result = await this.model.generateContent(prompt);
-      const responseTextCleaned = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-      const responseJson = JSON.parse(responseTextCleaned);
+      const responseJsonText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      const responseJson = JSON.parse(responseJsonText);
 
-      const sql = responseJson.sql;
       const thoughtProcess = responseJson.thought_process;
+      // *** THIS IS THE FIX ***
+      // Clean the SQL to remove any accidental semicolons before execution.
+      const sql = (responseJson.sql || '').trim().replace(/;$/, '');
 
-      // Execute the generated SQL
+      // Execute the cleaned SQL
       const { data: queryData, error: queryError } = await this.supabase.rpc('execute_sql', { query: sql });
 
       // Format the final response for the user
@@ -179,18 +181,15 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // 1. Classify intent
     const classifier = new IntentClassifier();
     const intent = await classifier.classify(query, history);
 
     let responseText = "";
 
     if (intent === 'conversational') {
-      // 2. Handle conversation
       const responder = new ConversationalResponder();
       responseText = await responder.generateResponse(query, history);
     } else {
-      // 3. Handle data query
       const engine = new DynamicQueryEngine(supabaseAdmin);
       responseText = await engine.generateAndExecute(query, history);
     }
