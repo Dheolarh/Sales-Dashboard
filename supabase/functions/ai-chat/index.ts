@@ -14,10 +14,10 @@ class IntentClassifier {
       Your task is to determine if the user's query is a general conversation or a request for data from a database.
 
       - **Conversational**: Greetings, thank you, how are you, general questions not related to business data.
-      - **Data Query**: Questions about sales, products, customers, revenue, inventory, etc.
+      - **Data Query**: Questions about sales, products, customers, revenue, inventory, logins etc.
 
-      Conversation History:
-      ${JSON.stringify(history, null, 2)}
+      Conversation History (for context):
+      ${JSON.stringify(history.slice(-4), null, 2)}
 
       User Query: "${query}"
 
@@ -31,7 +31,7 @@ class IntentClassifier {
       return 'conversational';
     } catch (e) {
       console.error("Intent classification failed:", e);
-      return 'data_query'; // Default to data_query on failure
+      return 'data_query';
     }
   }
 }
@@ -47,7 +47,7 @@ class ConversationalResponder {
       DO NOT try to query a database or generate SQL.
 
       Conversation History:
-      ${JSON.stringify(history, null, 2)}
+      ${JSON.stringify(history.slice(-4), null, 2)}
 
       User's Latest Message: "${query}"
 
@@ -63,7 +63,7 @@ class ConversationalResponder {
   }
 }
 
-// --- 3. DYNAMIC QUERY ENGINE (FINAL VERSION) ---
+// --- 3. DYNAMIC QUERY ENGINE (FINAL, STRICT VERSION) ---
 class DynamicQueryEngine {
     private model = genAI.getGenerativeModel({
     model: 'gemini-1.5-pro-latest',
@@ -83,11 +83,15 @@ class DynamicQueryEngine {
       console.error('Schema analysis failed:', error);
       return 'Database schema information unavailable';
     }
-    return data.map((table: any) =>
-      `Table \`${table.table_name}\`:\n` +
-      `  - Description: ${table.description || 'No description available.'}\n` +
-      `  - Columns: ${table.columns.map((c: any) => `${c.column_name} (${c.data_type})`).join(', ')}\n`
-    ).join('\n');
+    return data.map((table: any) => {
+        let tableInfo = `Table \`${table.table_name}\`:\n`;
+        if (table.description) tableInfo += `  - Description: ${table.description}\n`;
+        tableInfo += `  - Columns: ${table.columns.map((c: any) => `${c.column_name} (${c.data_type})`).join(', ')}\n`;
+        if (table.relationships && table.relationships.length > 0) {
+            tableInfo += `  - Relationships: ${table.relationships.map((r: any) => `\`${r.from_column}\` -> \`${r.to_table}\`.\`${r.to_column}\``).join(', ')}\n`;
+        }
+        return tableInfo;
+    }).join('\n');
   }
 
   async generateAndExecute(query: string, history: any[]): Promise<string> {
@@ -102,54 +106,50 @@ class DynamicQueryEngine {
 
       USER'S QUESTION: "${query}"
 
-      **RULES:**
-      1.  **NEVER** use a table or column that is NOT explicitly listed in the DATABASE SCHEMA. Do not guess or hallucinate names.
-      2.  "Stock" or "inventory" refers to the \`current_stock\` column in the \`products\` table.
-      3.  "Sales" or "revenue" refer to the \`transactions\` table, specifically the \`total_amount\` column.
-      4.  "Items" or "goods" refer to the \`products\` table.
-      5.  For "last week", use a construction like: \`transaction_time >= date_trunc('week', NOW() - interval '1 week') AND transaction_time < date_trunc('week', NOW())\`.
-      6.  Always add a \`LIMIT 20\` to your query unless the user specifies a different limit.
-      7.  **DO NOT** include a semicolon (;) at the end of your SQL query.
+      **MANDATORY RULES:**
+      1.  **NEVER** use a table or column that is NOT explicitly listed in the DATABASE SCHEMA. Do not guess.
+      2.  **EXPLICIT MAPPINGS**:
+          - "logins" or "logged in" refers to the \`access_logs\` table.
+          - "items", "goods", or "best selling" refers to the \`products\` table.
+          - "sales" or "revenue" refers to the \`transactions\` table.
+          - The primary key for \`products\` is \`id\`.
+      3.  **JOINING**: Use the "Relationships" info from the schema to construct correct JOIN clauses. Example: to join products and transactions, use \`products.id = transactions.product_id\`.
+      4.  **DATES**: For "last week", use: \`transaction_time >= date_trunc('week', NOW() - interval '1 week') AND transaction_time < date_trunc('week', NOW())\`.
+      5.  **NO SEMICOLON**: You MUST NOT include a semicolon (;) at the end of your SQL query.
+      6.  **LIMIT**: Always add a \`LIMIT 20\` to your query unless otherwise specified by the user.
 
-      **RESPONSE FORMAT:**
+      **RESPONSE FORMAT (Strict JSON):**
       Your output MUST be a single, valid JSON object with two keys: "thought_process" and "sql".
 
       **Thought Process Steps (Must be followed):**
-      1.  **Analyze Request**: Briefly state what the user wants in simple terms.
-      2.  **Map to Schema**: Identify the exact tables and columns from the schema that are needed.
-      3.  **Construct SQL**: Write the initial SQL query based on the mapping, ensuring no semicolon at the end.
-      4.  **Validate SQL**: Critically review the generated SQL. Ensure every table and column exists in the schema provided above and that there is no trailing semicolon.
+      1.  **Analyze Request**: State what the user wants.
+      2.  **Map to Schema**: Identify the exact tables, columns, and joins needed from the schema.
+      3.  **Construct SQL**: Write the query.
+      4.  **Validate SQL**: Critically review the generated SQL. Confirm that every table and column exists in the schema and that all JOIN conditions are correct based on the 'Relationships' section. This is the most important step.
 
-      **EXAMPLE for "What products are low in stock?"**
-      {
-        "thought_process": "1. Analyze Request: The user wants a list of products with low inventory.\\n2. Map to Schema: I need the 'name' and 'current_stock' columns from the 'products' table.\\n3. Construct SQL: I will write a SELECT query on the 'products' table, filtering where 'current_stock' is below a reasonable threshold, like 50.\\n4. Validate SQL: The table 'products' and columns 'name' and 'current_stock' all exist in the schema. The query is valid and has no trailing semicolon.",
-        "sql": "SELECT name, current_stock FROM products WHERE current_stock < 50 ORDER BY current_stock ASC LIMIT 20"
-      }
-
-      Now, generate the response for the user's question. Return ONLY the JSON object.
+      Return ONLY the JSON object.
     `;
 
     try {
       const result = await this.model.generateContent(prompt);
-      const responseJsonText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-      const responseJson = JSON.parse(responseJsonText);
+      const responseTextCleaned = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      const responseJson = JSON.parse(responseTextCleaned);
 
       const thoughtProcess = responseJson.thought_process;
-      // *** THIS IS THE FIX ***
-      // Clean the SQL to remove any accidental semicolons before execution.
       const sql = (responseJson.sql || '').trim().replace(/;$/, '');
 
-      // Execute the cleaned SQL
+      if (!sql) {
+        return "I'm sorry, I was unable to construct a query for that request. Please try rephrasing.";
+      }
+
       const { data: queryData, error: queryError } = await this.supabase.rpc('execute_sql', { query: sql });
 
-      // Format the final response for the user
       let responseText = `🧠 **Thought Process:**\n${thoughtProcess}\n\n`;
       responseText += `💻 **Executed SQL:**\n\`\`\`sql\n${sql}\n\`\`\`\n\n`;
 
-      if (queryError) {
-        responseText += `❌ **Execution Error:** ${queryError.message}\n\nThis might be because I made a mistake in the SQL query. Could you try rephrasing your question?`;
-      } else if (queryData?.error) {
-        responseText += `❌ **SQL Error:** ${queryData.error}\n\nThis usually means the generated query was invalid. I'm still learning the schema!`;
+      if (queryError || queryData?.error) {
+        const dbError = queryError ? queryError.message : queryData.error;
+        responseText += `❌ **SQL Error:** ${dbError}\n\nThis usually means the generated query was invalid. I'm still learning the schema!`;
       } else {
         const resultData = Array.isArray(queryData) ? queryData : [];
         responseText += `📊 **Returned ${resultData.length} rows:**\n\n`;
