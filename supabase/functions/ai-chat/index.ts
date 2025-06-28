@@ -1,195 +1,206 @@
 import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2';
-import { GoogleGenerativeAI } from 'npm:@google/generative-ai@0.15.0';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from 'npm:@google/generative-ai@0.15.0';
 import { corsHeaders } from '../_shared/cors.ts';
 
-// DYNAMIC SCHEMA ANALYZER
-class SchemaAnalyzer {
-    constructor(private supabase: SupabaseClient) { }
+const genAI = new GoogleGenerativeAI(Deno.env.get('GEMINI_API_KEY')!);
 
-    async analyzeSchema(): Promise<string> {
-        // Fetch schema information directly from database
-        const { data: tables, error } = await this.supabase.rpc('get_schema_info');
+// --- 1. INTENT CLASSIFIER ---
+// Determines if the user's query is conversational or data-related.
+class IntentClassifier {
+  private model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
 
-        if (error || !tables) {
-            console.error('Schema analysis failed:', error);
-            return 'Database schema information unavailable';
-        }
+  async classify(query: string, history: any[]): Promise<'conversational' | 'data_query'> {
+    const prompt = `
+      You are an intent classifier for a business AI assistant.
+      Your task is to determine if the user's query is a general conversation or a request for data from a database.
 
-        let schemaSummary = "Database Schema:\n";
-        for (const table of tables) {
-            schemaSummary += `\n## ${table.table_name}\n`;
-            schemaSummary += `- Description: ${table.description || 'No description'}\n`;
-            schemaSummary += "Columns:\n";
+      - **Conversational**: Greetings, thank you, how are you, general questions not related to business data.
+      - **Data Query**: Questions about sales, products, customers, revenue, inventory, etc.
 
-            if (table.columns) {
-                for (const column of table.columns) {
-                    schemaSummary += `  - ${column.column_name} (${column.data_type})`;
-                    if (column.description) schemaSummary += `: ${column.description}`;
-                    schemaSummary += "\n";
-                }
-            }
+      Conversation History:
+      ${JSON.stringify(history, null, 2)}
 
-            if (table.relationships && table.relationships.length > 0) {
-                schemaSummary += "Relationships:\n";
-                for (const rel of table.relationships) {
-                    schemaSummary += `  - ${rel.relationship_type} to ${rel.target_table} via ${rel.foreign_key}\n`;
-                }
-            }
-        }
+      User Query: "${query}"
 
-        return schemaSummary;
-    }
-
-    async generateSchemaMapping(query: string): Promise<string> {
-        // Use Gemini to dynamically create schema mapping
-        const genAI = new GoogleGenerativeAI(Deno.env.get('GEMINI_API_KEY')!);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
-
-        const prompt = `
-You are a database schema mapping expert. Analyze the following query and database schema to create a semantic mapping:
-
-Query: "${query}"
-
-Database Schema:
-${await this.analyzeSchema()}
-
-Create a JSON mapping that connects natural language concepts in the query to database elements. Follow this format:
-{
-  "query_terms": {
-    "term1": "schema_element",
-    "term2": "schema_element"
-  },
-  "relationships": [
-    "table1.column -> table2.column"
-  ],
-  "hypotheses": [
-    "Possible interpretation 1",
-    "Possible interpretation 2"
-  ]
-}
-
-Focus on:
-- Mapping nouns to tables
-- Mapping verbs/actions to relationships or columns
-- Mapping adjectives to column values or filters
-- Identifying implied relationships
-
-Return ONLY the JSON object with no additional text.
+      Based on the query and history, is this 'conversational' or a 'data_query'?
+      Return ONLY the classification.
     `;
-
-        try {
-            const result = await model.generateContent(prompt);
-            return result.response.text();
-        } catch (error) {
-            console.error('Mapping generation failed:', error);
-            return '{}';
-        }
+    try {
+      const result = await this.model.generateContent(prompt);
+      const classification = result.response.text().trim().toLowerCase();
+      if (classification.includes('data_query')) return 'data_query';
+      return 'conversational';
+    } catch (e) {
+      console.error("Intent classification failed:", e);
+      // Default to data_query on failure to be safe
+      return 'data_query';
     }
+  }
 }
 
-// QUERY EXECUTION ENGINE
-class QueryEngine {
-    constructor(private supabase: SupabaseClient) { }
 
-    async executeDynamicQuery(query: string, mapping: any): Promise<any> {
-        // Use Gemini to generate SQL based on dynamic mapping
-        const genAI = new GoogleGenerativeAI(Deno.env.get('GEMINI_API_KEY')!);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
+// --- 2. CONVERSATIONAL RESPONDER ---
+// Handles non-data related parts of the conversation.
+class ConversationalResponder {
+  private model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
 
-        const prompt = `
-Based on the following query and schema mapping, generate a valid PostgreSQL SELECT query:
+  async generateResponse(query: string, history: any[]): Promise<string> {
+    const prompt = `
+      You are Stella, a friendly and helpful AI business assistant.
+      The user is having a general conversation with you. Respond naturally and helpfully.
+      DO NOT try to query a database or generate SQL.
 
-Query: "${query}"
+      Conversation History:
+      ${JSON.stringify(history, null, 2)}
 
-Schema Mapping:
-${JSON.stringify(mapping, null, 2)}
+      User's Latest Message: "${query}"
 
-Rules:
-1. Use only tables and columns that exist in the schema
-2. Prefer explicit JOINs over implicit joins
-3. Include only necessary columns
-4. Add LIMIT 10 unless otherwise specified
-5. Use current date functions where appropriate
-
-Return ONLY the SQL query with no additional text or explanations.
+      Your response:
     `;
-
-        try {
-            const result = await model.generateContent(prompt);
-            let sql = result.response.text().trim();
-
-            // Clean common artifacts
-            sql = sql.replace(/```sql/g, '').replace(/```/g, '').trim();
-
-            // Execute the generated SQL
-            const { data, error } = await this.supabase.rpc('execute_sql', { query: sql });
-            return { sql, data, error };
-
-        } catch (error) {
-            console.error('Query generation failed:', error);
-            return {
-                sql: '-- Failed to generate SQL',
-                error: { message: 'AI query generation failed' }
-            };
-        }
+    try {
+      const result = await this.model.generateContent(prompt);
+      return result.response.text();
+    } catch (e) {
+      console.error("Conversational response failed:", e);
+      return "I'm sorry, I had trouble processing that. Could you try rephrasing?";
     }
+  }
 }
 
-// MAIN FUNCTION
-Deno.serve(async (req) => {
-    if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders });
+
+// --- 3. DYNAMIC QUERY ENGINE ---
+// Dynamically generates and executes SQL based on a deep analysis of the user query and schema.
+class DynamicQueryEngine {
+  private model = genAI.getGenerativeModel({
+    model: 'gemini-1.5-pro-latest',
+    safetySettings: [
+      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    ]
+  });
+
+  constructor(private supabase: SupabaseClient) {}
+
+  private async getSchema(): Promise<string> {
+    const { data, error } = await this.supabase.rpc('get_schema_info');
+    if (error) {
+      console.error('Schema analysis failed:', error);
+      return 'Database schema information unavailable';
     }
+    // Simplified schema string for the prompt
+    return data.map((table: any) => `Table \`${table.table_name}\`: Columns: ${table.columns.map((c: any) => c.column_name).join(', ')}`).join('\n');
+  }
+
+  async generateAndExecute(query: string, history: any[]): Promise<string> {
+    const schema = await this.getSchema();
+    const prompt = `
+      You are a world-class data analyst who can write perfect PostgreSQL queries.
+      Your task is to answer the user's question by generating a single, valid PostgreSQL query based on the provided database schema.
+
+      DATABASE SCHEMA:
+      ---
+      ${schema}
+      ---
+
+      CONVERSATION HISTORY:
+      ---
+      ${JSON.stringify(history, null, 2)}
+      ---
+
+      USER'S QUESTION: "${query}"
+
+      Follow these steps to generate the response:
+      1.  **Analyze the Request**: Understand what the user is asking for. Identify key metrics, dimensions, and filters.
+      2.  **Map to Schema**: Map the user's request to the available tables and columns in the schema. Think about synonyms (e.g., "items" -> "products", "sales" -> "transactions", "revenue" -> "total_amount").
+      3.  **Construct SQL**: Write a single, valid PostgreSQL SELECT query to answer the question.
+          - Use \`ilike\` for case-insensitive text matching.
+          - For dates, use functions like \`NOW()\` and \`INTERVAL\`. For "last week", use a construction like \`transaction_time >= date_trunc('week', NOW() - interval '1 week') AND transaction_time < date_trunc('week', NOW())\`.
+          - Always join tables when necessary (e.g., \`transactions\` to \`products\`).
+          - Add a \`LIMIT 20\` to your query unless the user asks for a different limit.
+      4.  **Final Response**: Format your final output as a single JSON object containing two keys: "thought_process" and "sql".
+          - "thought_process": A brief, step-by-step explanation of how you understood the request and constructed the query.
+          - "sql": The complete, valid PostgreSQL query string.
+
+      Return ONLY the JSON object.
+    `;
 
     try {
-        const { query, history } = await req.json();
-        const supabaseAdmin = createClient(
-            Deno.env.get('SUPABASE_URL')!,
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-        );
+      const result = await this.model.generateContent(prompt);
+      const responseJsonText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      const responseJson = JSON.parse(responseJsonText);
 
-        const analyzer = new SchemaAnalyzer(supabaseAdmin);
-        const engine = new QueryEngine(supabaseAdmin);
+      const sql = responseJson.sql;
+      const thoughtProcess = responseJson.thought_process;
 
-        // Step 1: Generate dynamic schema mapping
-        const rawMapping = await analyzer.generateSchemaMapping(query);
-        let mapping = {};
-        try {
-            mapping = JSON.parse(rawMapping.match(/{[\s\S]*}/)?.[0] || '{}');
-        } catch (e) {
-            console.error('JSON parsing failed:', e);
-        }
+      // Execute the generated SQL
+      const { data: queryData, error: queryError } = await this.supabase.rpc('execute_sql', { query: sql });
 
-        // Step 2: Execute dynamic query
-        const { sql, data, error } = await engine.executeDynamicQuery(query, mapping);
+      // Format the final response for the user
+      let responseText = `🧠 **Thought Process:**\n${thoughtProcess}\n\n`;
+      responseText += `💻 **Executed SQL:**\n\`\`\`sql\n${sql}\n\`\`\`\n\n`;
 
-        // Step 3: Format response
-        let responseText = `🔍 **Results for:** "${query}"\n\n`;
-
-        if (error) {
-            responseText += `❌ **Execution Error:** ${error.message}\n\n`;
-        } else if (data?.error) {
-            responseText += `❌ **SQL Error:** ${data.error}\n\n`;
+      if (queryError) {
+        responseText += `❌ **Execution Error:** ${queryError.message}\n\nThis might be because I made a mistake in the SQL query. Could you try rephrasing your question?`;
+      } else if (queryData?.error) {
+        responseText += `❌ **SQL Error:** ${queryData.error}\n\nThis usually means the generated query was invalid. I'm still learning the schema!`;
+      } else {
+        const resultData = Array.isArray(queryData) ? queryData : [];
+        responseText += `📊 **Returned ${resultData.length} rows:**\n\n`;
+        if (resultData.length > 0) {
+          responseText += "```json\n" + JSON.stringify(resultData, null, 2) + "\n```";
         } else {
-            const resultData = Array.isArray(data) ? data : [];
-            responseText += `📊 **Returned ${resultData.length} rows**\n\n`;
-            if (resultData.length > 0) {
-                responseText += "```json\n" + JSON.stringify(resultData.slice(0, 5), null, 2) + "\n```\n\n";
-            }
+          responseText += "The query ran successfully, but returned no results.";
         }
+      }
+      return responseText;
 
-        responseText += `💻 **Executed SQL:**\n\`\`\`sql\n${sql}\n\`\`\`\n\n`;
-        responseText += `🧠 **Schema Mapping:**\n\`\`\`json\n${JSON.stringify(mapping, null, 2)}\n\`\`\``;
-
-        return new Response(JSON.stringify({ response: responseText }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-
-    } catch (error) {
-        const errorResponse = `❌ **Critical Error:** ${error.message || 'Unknown error'}\n\n`;
-        return new Response(JSON.stringify({ response: errorResponse }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 500
-        });
+    } catch (e) {
+      console.error("Query generation/execution failed:", e);
+      return `I'm sorry, I encountered an error while trying to answer your question. The AI model may have returned an invalid response. Details: ${e.message}`;
     }
+  }
+}
+
+// --- MAIN FUNCTION ---
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    const { query, history } = await req.json();
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    // 1. Classify intent
+    const classifier = new IntentClassifier();
+    const intent = await classifier.classify(query, history);
+
+    let responseText = "";
+
+    if (intent === 'conversational') {
+      // 2. Handle conversation
+      const responder = new ConversationalResponder();
+      responseText = await responder.generateResponse(query, history);
+    } else {
+      // 3. Handle data query
+      const engine = new DynamicQueryEngine(supabaseAdmin);
+      responseText = await engine.generateAndExecute(query, history);
+    }
+
+    return new Response(JSON.stringify({ response: responseText }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    const errorResponse = `❌ **Critical Error:** ${error.message || 'Unknown error'}\n\n`;
+    return new Response(JSON.stringify({ response: errorResponse }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500
+    });
+  }
 });
