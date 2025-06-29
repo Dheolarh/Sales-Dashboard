@@ -1,4 +1,3 @@
-import 'https://esm.sh/reflect-metadata';
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { SqlDatabase } from "langchain/sql_db";
 import { SqlToolkit, createSqlAgent } from "langchain/agents/toolkits/sql";
