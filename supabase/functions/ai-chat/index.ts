@@ -2,7 +2,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { SqlDatabase } from "langchain/sql_db";
 import { SqlToolkit, createSqlAgent } from "langchain/agents/toolkits/sql";
 import { AgentExecutor } from "langchain/agents";
-import postgres from "postgres"; // <-- Import the postgres library
+import postgres from "postgres";
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
 
     const llm = new ChatGoogleGenerativeAI({
       apiKey: Deno.env.get('GOOGLE_API_KEY'),
-      model: 'gemini-1.5-pro', // Note: I've reverted to gemini-pro as 2.5 is not a valid model name as of my last update. Adjust if needed.
+      model: 'gemini-1.5-pro',
       temperature: 0,
     });
 
