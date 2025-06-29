@@ -2,8 +2,8 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import postgres from "postgres";
 
-// Helper function to dynamically fetch the database schema
-async function getDbSchema(sql: postgres.Sql): Promise<string> {
+// Helper function to dynamically fetch the database schema (currently unused but kept for future use)
+async function _getDbSchema(sql: postgres.Sql): Promise<string> {
   try {
     const tables = await sql`
       SELECT table_name
@@ -43,31 +43,34 @@ async function getDbSchema(sql: postgres.Sql): Promise<string> {
 
 const SYSTEM_PROMPT = `
 You are Insight, a helpful AI assistant for the QuickCart sales dashboard.
-Your goal is to assist users by either guiding them on how to use the web application or by answering their data-related queries.
 
-Follow these instructions in order of priority:
+IMPORTANT: When users ask questions that require data from the database, you should ALWAYS respond with exactly this format:
+[DATABASE_QUERY]
+[SQL query here]
+[/DATABASE_QUERY]
 
-1. **Application Guidance (Top Priority):**
-   If a user asks how to perform actions like adding, editing, creating, updating, or deleting data, guide them to the correct page in the web application.
-   - **Do not** generate SQL queries for modification requests.
-   - Instead, provide helpful directions to the appropriate page.
+For example:
+- User: "How many products do we have?"
+- Your response: "[DATABASE_QUERY]SELECT COUNT(*) FROM products;[/DATABASE_QUERY]"
 
-   Available pages:
-   - **Dashboard Page:** Main landing page with revenue, sales, and transaction overviews
-   - **Products Page:** Add new products, edit product details (price, stock), view all products
-   - **Categories Page:** Manage product categories
-   - **Companies Page:** Manage supplier and company information
-   - **Transactions Page:** Detailed log of all past sales
-   - **Admins Page:** Manage user accounts (super_admin only)
-   - **Settings Page:** Change personal preferences
+- User: "What's our total revenue?"
+- Your response: "[DATABASE_QUERY]SELECT SUM(total_amount) FROM transactions;[/DATABASE_QUERY]"
 
-2. **Database Queries (For Read-Only Questions):**
-   If the user asks "what", "how many", "who", or "list" queries that require reading existing data, generate a PostgreSQL SELECT query.
-   - Example: "What was our total revenue last month?" or "How many products are low in stock?"
-   - Only SELECT statements are allowed. For data modifications, refer to guidance above.
+For non-data questions or guidance, respond normally without the [DATABASE_QUERY] tags.
 
-3. **General Conversation:**
-   For queries not related to the dashboard or its data, answer from general knowledge while maintaining a helpful assistant persona.
+Available tables and their common columns:
+- products: id, name, price, stock_quantity, category_id
+- categories: id, name, description
+- transactions: id, total_amount, created_at, user_id
+- companies: id, name, contact_info
+- users: id, username, email, last_login
+
+For guidance on adding/editing data, direct users to:
+- Products Page: for managing products
+- Categories Page: for managing categories
+- Companies Page: for managing suppliers
+- Transactions Page: for viewing sales history
+- Settings Page: for user preferences
 `;
 
 // Main function to serve requests
@@ -115,65 +118,33 @@ Deno.serve(async (req) => {
     }
     console.log("AI client initialized successfully.");
 
-    // First, get initial response to determine if this is guidance or data query
-    const initialResponse = await chat.sendMessage(query);
-    const firstPassText = initialResponse.response.text();
+    // Get AI response
+    const response = await chat.sendMessage(query);
+    const aiResponse = response.response.text();
     
-    // Check if response contains guidance keywords
-    const guidanceKeywords = ["go to the", "on the page", "you can manage", "navigate to", "you should be able to"];
-    if (guidanceKeywords.some(keyword => firstPassText.toLowerCase().includes(keyword))) {
-        console.log("Providing guidance directly:", firstPassText);
-        return new Response(JSON.stringify({ response: firstPassText }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
-        });
-    }
+    console.log("AI response:", aiResponse);
 
-    // Check if this is a data query by looking at the user's question
-    const dataQueryKeywords = ["what", "how many", "how much", "list", "show me", "count", "total", "sum", "revenue", "sales", "products", "top selling", "best selling", "stock", "inventory"];
-    const isDataQuery = dataQueryKeywords.some(keyword => query.toLowerCase().includes(keyword));
-    
-    // If it's a data query and we have database URL, try database query
-    if (isDataQuery && supabaseDbUrl) {
-      let sql;
-      try {
-        console.log("Attempting database query for:", query);
-        sql = postgres(supabaseDbUrl);
-        
-        console.log("Getting database schema...");
-        const dbSchema = await getDbSchema(sql);
-        console.log("Schema fetched, length:", dbSchema.length);
-
-        const sqlPrompt = `
-          Based on the database schema below, write a single, valid PostgreSQL SELECT query to answer the user's query.
-          Return ONLY the raw SQL query, no explanation or markdown.
-
-          Schema:
-          ${dbSchema}
-
-          User query: "${query}"
-
-          SQL Query:
-        `;
-
-        console.log("Sending SQL generation prompt...");
-        const sqlResult = await chat.sendMessage(sqlPrompt);
-        const generatedSql = sqlResult.response.text().trim().replace(/^```sql\n|```$/g, '').trim();
-        console.log("Generated SQL:", generatedSql);
+    // Check if AI wants to query the database
+    if (aiResponse.includes('[DATABASE_QUERY]') && aiResponse.includes('[/DATABASE_QUERY]')) {
+      const sqlMatch = aiResponse.match(/\[DATABASE_QUERY\](.*?)\[\/DATABASE_QUERY\]/s);
+      if (sqlMatch && supabaseDbUrl) {
+        const generatedSql = sqlMatch[1].trim();
+        console.log("Extracted SQL:", generatedSql);
         
         if (generatedSql.toLowerCase().startsWith('select')) {
-          console.log("Executing SQL query...");
+          let sql;
           try {
+            sql = postgres(supabaseDbUrl);
+            console.log("Executing SQL:", generatedSql);
             const data = await sql.unsafe(generatedSql);
             console.log("SQL execution successful, data:", data);
-            console.log("Data type:", typeof data);
-            console.log("Data length:", Array.isArray(data) ? data.length : 'not array');
             
-            // Check if we got any data
+            await sql.end();
+            
+            // If no data found
             if (!data || (Array.isArray(data) && data.length === 0)) {
-              await sql.end();
               return new Response(JSON.stringify({ 
-                response: `I executed the query successfully, but no data was found. The query was: ${generatedSql}` 
+                response: "I executed the query successfully, but no data was found in the database." 
               }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                 status: 200,
@@ -182,72 +153,52 @@ Deno.serve(async (req) => {
             
             // Format the response with data
             const finalPrompt = `
-              Based on this data, provide a clear answer to: "${query}"
+              The user asked: "${query}"
+              I executed this SQL: ${generatedSql}
+              Here's the data: ${JSON.stringify(data, null, 2)}
               
-              Data: ${JSON.stringify(data, null, 2)}
-              
-              Answer:
+              Please provide a clear, friendly answer to the user's question based on this data:
             `;
             
-            console.log("Generating final response...");
-            const finalResult = await chat.sendMessage(finalPrompt);
-            const finalResponse = finalResult.response.text();
-            console.log("Final response generated successfully");
-            
-            await sql.end();
-            return new Response(JSON.stringify({ response: finalResponse }), {
+            const finalResponse = await chat.sendMessage(finalPrompt);
+            return new Response(JSON.stringify({ 
+              response: finalResponse.response.text() 
+            }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
               status: 200,
             });
             
-          } catch (sqlExecutionError) {
-            console.error("SQL execution failed:", sqlExecutionError);
-            console.error("SQL that failed:", generatedSql);
-            await sql.end();
-            const errorMessage = sqlExecutionError instanceof Error ? sqlExecutionError.message : String(sqlExecutionError);
+          } catch (sqlError) {
+            console.error("SQL execution error:", sqlError);
+            if (sql) {
+              try { 
+                await sql.end(); 
+              } catch (closeError) {
+                console.error("Error closing connection:", closeError);
+              }
+            }
+            const errorMessage = sqlError instanceof Error ? sqlError.message : String(sqlError);
             return new Response(JSON.stringify({ 
-              response: `I tried to run this query: "${generatedSql}" but got an error: ${errorMessage}. This might mean the table or column doesn't exist in the database.` 
+              response: `I tried to run the query "${generatedSql}" but got an error: ${errorMessage}. The table or column might not exist.` 
             }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
               status: 200,
             });
           }
         } else {
-          console.log("Generated SQL doesn't start with SELECT:", generatedSql);
-          await sql.end();
           return new Response(JSON.stringify({ 
-            response: "I couldn't generate a proper database query for your question. Could you try rephrasing it?" 
+            response: "I can only execute SELECT queries for security reasons." 
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
           });
         }
-        
-      } catch (dbError) {
-        console.error("Database error:", dbError);
-        console.error("Database error stack:", dbError instanceof Error ? dbError.stack : 'No stack trace');
-        
-        if (sql) {
-          try {
-            await sql.end();
-          } catch (closeError) {
-            console.error("Error closing database connection:", closeError);
-          }
-        }
-        
-        // Return a helpful error message instead of falling through
-        return new Response(JSON.stringify({ 
-          response: "I'm having trouble accessing the database right now. Please try your question again in a moment, or check if the database is available." 
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
-        });
       }
     }
 
-    // Return the initial AI response if no database query needed
+    // Return the AI response directly (for guidance or general conversation)
     return new Response(JSON.stringify({ 
-      response: firstPassText
+      response: aiResponse
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
