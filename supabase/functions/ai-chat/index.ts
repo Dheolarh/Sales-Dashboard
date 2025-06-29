@@ -101,14 +101,18 @@ Deno.serve(async (req) => {
   }
 
   try {
+    console.log("Received request:", req.method, req.url);
     const { question } = await req.json();
     if (!question) throw new Error("Question is required");
+    console.log("User question:", question);
 
     // Initialize clients
+    console.log("Initializing database and AI clients...");
     const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!);
     const genAI = new GoogleGenerativeAI(Deno.env.get("GEMINI_API_KEY")!);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro", systemInstruction: SYSTEM_PROMPT });
     const chat = model.startChat();
+    console.log("Clients initialized successfully.");
 
     // First, ask the model if this is a guidance question or a data question based on the system prompt.
     const initialResponse = await chat.sendMessage(question);
@@ -142,9 +146,11 @@ Deno.serve(async (req) => {
       SQL Query:
     `;
 
+    console.log("Sending SQL generation prompt to Gemini...");
     const sqlResult = await chat.sendMessage(sqlPrompt);
     let generatedSql = sqlResult.response.text();
     generatedSql = generatedSql.trim().replace(/^```sql\n|```$/g, '').trim();
+    console.log("Generated SQL:", generatedSql);
 
     // Security check
     if (!generatedSql.toLowerCase().startsWith('select')) {
@@ -157,6 +163,7 @@ Deno.serve(async (req) => {
 
     console.log("Executing SQL:", generatedSql);
     const data = await sql.unsafe(generatedSql);
+    console.log("SQL execution complete. Data retrieved:", data);
 
     // Final step: Formulate answer based on data
     const finalPrompt = `
@@ -172,7 +179,8 @@ Deno.serve(async (req) => {
 
       Final Answer:
     `;
-
+    
+    console.log("Sending final prompt to Gemini to formulate response...");
     const finalResult = await chat.sendMessage(finalPrompt);
     const finalResponse = finalResult.response.text();
 
