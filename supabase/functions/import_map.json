@@ -1,9 +1,7 @@
 {
   "imports": {
-    "langchain/agents": "https://esm.sh/langchain@0.2.10/agents",
-    "langchain/agents/toolkits/sql": "https://esm.sh/langchain@0.2.10/agents/toolkits/sql",
-    "langchain/sql_db": "https://esm.sh/langchain@0.2.10/sql_db",
-    "@langchain/google-genai": "https://esm.sh/@langchain/google-genai@0.0.22",
-    "postgres": "https://esm.sh/postgres@3.4.4"
+    "../_shared/cors.ts": "./_shared/cors.ts",
+    "postgres": "https://esm.sh/postgres@3.4.4",
+    "@google/generative-ai": "https://esm.sh/@google/generative-ai@0.15.0"
   }
 }
