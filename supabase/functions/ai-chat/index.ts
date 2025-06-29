@@ -135,10 +135,14 @@ Deno.serve(async (req) => {
     
     // If it's a data query and we have database URL, try database query
     if (isDataQuery && supabaseDbUrl) {
+      let sql;
       try {
         console.log("Attempting database query for:", query);
-        const sql = postgres(supabaseDbUrl);
+        sql = postgres(supabaseDbUrl);
+        
+        console.log("Getting database schema...");
         const dbSchema = await getDbSchema(sql);
+        console.log("Schema fetched, length:", dbSchema.length);
 
         const sqlPrompt = `
           Based on the database schema below, write a single, valid PostgreSQL SELECT query to answer the user's query.
@@ -152,12 +156,15 @@ Deno.serve(async (req) => {
           SQL Query:
         `;
 
+        console.log("Sending SQL generation prompt...");
         const sqlResult = await chat.sendMessage(sqlPrompt);
         const generatedSql = sqlResult.response.text().trim().replace(/^```sql\n|```$/g, '').trim();
+        console.log("Generated SQL:", generatedSql);
         
         if (generatedSql.toLowerCase().startsWith('select')) {
-          console.log("Executing SQL:", generatedSql);
+          console.log("Executing SQL query...");
           const data = await sql.unsafe(generatedSql);
+          console.log("SQL execution successful, data length:", Array.isArray(data) ? data.length : 'not array');
           
           // Format the response with data
           const finalPrompt = `
@@ -168,8 +175,10 @@ Deno.serve(async (req) => {
             Answer:
           `;
           
+          console.log("Generating final response...");
           const finalResult = await chat.sendMessage(finalPrompt);
           const finalResponse = finalResult.response.text();
+          console.log("Final response generated successfully");
           
           await sql.end();
           return new Response(JSON.stringify({ response: finalResponse }), {
@@ -178,12 +187,34 @@ Deno.serve(async (req) => {
           });
         } else {
           console.log("Generated SQL doesn't start with SELECT:", generatedSql);
+          await sql.end();
+          return new Response(JSON.stringify({ 
+            response: "I couldn't generate a proper database query for your question. Could you try rephrasing it?" 
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+          });
         }
         
-        await sql.end();
       } catch (dbError) {
         console.error("Database error:", dbError);
-        // Fall through to return the initial AI response
+        console.error("Database error stack:", dbError instanceof Error ? dbError.stack : 'No stack trace');
+        
+        if (sql) {
+          try {
+            await sql.end();
+          } catch (closeError) {
+            console.error("Error closing database connection:", closeError);
+          }
+        }
+        
+        // Return a helpful error message instead of falling through
+        return new Response(JSON.stringify({ 
+          response: "I'm having trouble accessing the database right now. Please try your question again in a moment, or check if the database is available." 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        });
       }
     }
 
