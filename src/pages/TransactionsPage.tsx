@@ -128,22 +128,22 @@ export const TransactionsPage: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <ShoppingCart className="h-8 w-8 text-quickcart-600 mr-3" />
-            Transaction Management
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+            <ShoppingCart className="h-6 w-6 sm:h-8 sm:w-8 text-quickcart-600 mr-2 sm:mr-3" />
+            Transactions
           </h1>
-          <p className="text-gray-600 mt-1">Monitor and analyze all sales transactions</p>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">Monitor all sales transactions</p>
         </div>
-        <Button onClick={exportTransactions}>
+        <Button onClick={exportTransactions} className="w-full sm:w-auto">
           <Download className="h-4 w-4 mr-2" />
-          Export CSV
+          Export Data
         </Button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -238,7 +238,7 @@ export const TransactionsPage: React.FC = () => {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[900px]">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">

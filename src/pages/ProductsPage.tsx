@@ -269,15 +269,15 @@ export const ProductsPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <Package className="h-8 w-8 text-quickcart-600 mr-3" />
-            Product Management
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+            <Package className="h-6 w-6 sm:h-8 sm:w-8 text-quickcart-600 mr-2 sm:mr-3" />
+            Products
           </h1>
-          <p className="text-gray-600 mt-1">Manage your product catalog and inventory</p>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your product inventory</p>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
+        <Button onClick={() => setShowAddModal(true)} className="w-full sm:w-auto">
           <Plus className="h-4 w-4 mr-2" />
           Add Product
         </Button>
@@ -320,7 +320,7 @@ export const ProductsPage: React.FC = () => {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[900px]">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>

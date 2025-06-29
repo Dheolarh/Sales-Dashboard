@@ -148,15 +148,15 @@ export const CompaniesPage: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <Building2 className="h-8 w-8 text-quickcart-600 mr-3" />
-            Company Management
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+            <Building2 className="h-6 w-6 sm:h-8 sm:w-8 text-quickcart-600 mr-2 sm:mr-3" />
+            Companies
           </h1>
-          <p className="text-gray-600 mt-1">Manage supplier companies and brands</p>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">Manage product manufacturers and suppliers</p>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
+        <Button onClick={() => setShowAddModal(true)} className="w-full sm:w-auto">
           <Plus className="h-4 w-4 mr-2" />
           Add Company
         </Button>
@@ -182,81 +182,89 @@ export const CompaniesPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Companies Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredCompanies.map(company => (
-          <Card key={company.id} className="hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-quickcart-100 rounded-lg">
-                    <Building2 className="h-6 w-6 text-quickcart-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{company.name}</h3>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <MapPin className="h-4 w-4 mr-1" />
+      {/* Companies Table */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Company Name
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Country
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Phone
+                  </th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Website
+                  </th>
+                  <th className="text-right py-3 px-4 text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredCompanies.map(company => (
+                  <tr key={company.id}>
+                    <td className="py-4 px-4 text-sm whitespace-nowrap">
+                      <div className="flex items-center">
+                        <Building2 className="h-5 w-5 text-quickcart-600 mr-3" />
+                        <span className="font-medium text-gray-900">{company.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 text-sm whitespace-nowrap">
                       {company.country}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex space-x-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleEdit(company)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleDelete(company.id)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              
-              {company.contact_info && Object.keys(company.contact_info).length > 0 && (
-                <div className="space-y-2 mb-4">
-                  {company.contact_info.email && (
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Mail className="h-4 w-4 mr-2" />
-                      {company.contact_info.email}
-                    </div>
-                  )}
-                  {company.contact_info.phone && (
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Phone className="h-4 w-4 mr-2" />
-                      {company.contact_info.phone}
-                    </div>
-                  )}
-                  {company.contact_info.website && (
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Globe className="h-4 w-4 mr-2" />
-                      <a 
-                        href={company.contact_info.website} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-quickcart-600 hover:underline"
-                      >
-                        Website
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              <div className="text-xs text-gray-500 border-t pt-3">
-                Created: {formatDateTime(company.created_at)}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                    </td>
+                    <td className="py-4 px-4 text-sm whitespace-nowrap">
+                      {company.contact_info?.email}
+                    </td>
+                    <td className="py-4 px-4 text-sm whitespace-nowrap">
+                      {company.contact_info?.phone}
+                    </td>
+                    <td className="py-4 px-4 text-sm whitespace-nowrap">
+                      {company.contact_info?.website ? (
+                        <a 
+                          href={company.contact_info.website} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-quickcart-600 hover:underline"
+                        >
+                          {company.contact_info.website}
+                        </a>
+                      ) : '-'}
+                    </td>
+                    <td className="py-4 px-4 text-sm text-right whitespace-nowrap">
+                      <div className="flex justify-end space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEdit(company)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDelete(company.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
       {filteredCompanies.length === 0 && (
         <Card>

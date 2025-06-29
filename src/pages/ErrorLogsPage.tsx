@@ -11,7 +11,8 @@ import {
   Filter,
   Eye,
   Check,
-  X
+  X,
+  Download
 } from 'lucide-react'
 import { dbService, supabase } from '../lib/supabase'
 import { formatCurrency, formatDateTime } from '../utils/format'
@@ -60,6 +61,11 @@ export const ErrorLogsPage: React.FC = () => {
       console.error('Failed to resolve error:', error)
       alert('Failed to resolve error. Please try again.')
     }
+  }
+
+  const exportLogs = async () => {
+    // Implement export functionality here
+    alert('Export logs feature is not yet implemented.')
   }
 
   const filteredErrors = errorLogs.filter(error => {
@@ -124,12 +130,18 @@ export const ErrorLogsPage: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-          <AlertTriangle className="h-8 w-8 text-red-600 mr-3" />
-          Error Logs & Anomalies
-        </h1>
-        <p className="text-gray-600 mt-1">Monitor and resolve system anomalies detected by AI</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+            <AlertTriangle className="h-6 w-6 sm:h-8 sm:w-8 text-quickcart-600 mr-2 sm:mr-3" />
+            Error Logs
+          </h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">Monitor system errors and issues</p>
+        </div>
+        <Button onClick={exportLogs} className="w-full sm:w-auto">
+          <Download className="h-4 w-4 mr-2" />
+          Export Logs
+        </Button>
       </div>
 
       {/* Filters */}

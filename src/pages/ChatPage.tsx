@@ -197,7 +197,7 @@ export const ChatPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-4rem)]">
       <div className="flex-1 flex flex-col">
         <div className="p-6 border-b">
           <h1 className="text-xl font-bold text-gray-900 flex items-center">
@@ -320,6 +320,25 @@ export const ChatPage: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+      </div>
+      
+      {/* Keywords panel - hide on mobile by default */}
+      <div className={`
+        w-full lg:w-80 border-l border-gray-200 bg-gray-50 
+        ${showKeywords ? 'block' : 'hidden'} lg:block
+      `}>
+        {/* Keywords content */}
+        <div className="p-4">
+          <h2 className="text-lg font-semibold mb-4">Keyword Categories</h2>
+          {Object.entries(KEYWORD_CATEGORIES).map(([category, keywords]) => (
+            <div key={category} className="mb-4">
+              <h3 className="font-medium text-md mb-2">{category}</h3>
+              <ul className="list-disc list-inside text-sm text-gray-700">
+                {keywords.map(keyword => <li key={keyword}>{keyword}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

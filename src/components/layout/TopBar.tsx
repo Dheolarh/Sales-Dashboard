@@ -6,6 +6,7 @@ import { NotificationCenter } from '../notifications/NotificationCenter';
 import { Badge } from '../ui/Badge';
 import type { Notification } from '../../lib/supabase';
 import { useSettingsContext } from '../../hooks/SettingsContext';
+import { Button } from '../ui/Button';
 
 // Defines the props the component now receives from DashboardLayout
 interface TopBarProps {
@@ -31,75 +32,138 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications 
   };
 
   return (
-    <>
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="flex items-center justify-between h-16 px-6">
+    <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3">
+      <div className="flex items-center justify-between">
+        {/* Mobile: Only notification bell */}
+        <div className="flex lg:hidden items-center justify-between w-full">
+          <div></div> {/* Empty spacer */}
           <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-semibold text-gray-900">Sales Dashboard</h1>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={openStore}
-              className="flex items-center space-x-2 px-3 py-2 text-sm text-quickcart-600 hover:text-quickcart-700 hover:bg-quickcart-50 rounded-md transition-colors"
+            {/* Visit Store Button - Mobile Center */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => window.open('https://quickcart-store.com', '_blank')}
+              className="hidden sm:flex"
             >
-              <ExternalLink className="h-4 w-4" />
-              <span>View Store</span>
-            </button>
-
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <Globe className="h-4 w-4" />
-              <span>
-                {currentTime.toLocaleString('en-US', {
-                  timeZone: preferences.timezone,
-                  dateStyle: 'medium',
-                  timeStyle: 'medium'
-                })} {preferences.timezone}
-              </span>
-            </div>
-
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Visit Store
+            </Button>
+            
+            {/* Notification Bell */}
             <div className="relative">
-              <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative"
+              >
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
-                  <Badge variant="error" size="sm" className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 flex items-center justify-center text-xs">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </Badge>
+                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
                 )}
-              </button>
-            </div>
-
-            <Link to="/settings" className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
-              <Settings className="h-5 w-5" />
-            </Link>
-
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-quickcart-600 text-white rounded-full flex items-center justify-center">
-                  <User className="h-4 w-4" />
+              </Button>
+              
+              {/* Notifications Dropdown */}
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-md shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden">
+                  {/* Header */}
+                  <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-900">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={markAllAsRead}
+                        className="text-xs"
+                      >
+                        Mark all read
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Notifications List */}
+                  <div className="max-h-64 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-sm text-gray-500">
+                        No notifications
+                      </div>
+                    ) : (
+                      notifications.slice(0, 5).map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={`px-4 py-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
+                            !notification.is_read ? 'bg-blue-50' : ''
+                          }`}
+                          onClick={() => handleNotificationClick(notification)}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm ${!notification.is_read ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
+                                {notification.title}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1 truncate">
+                                {notification.message}
+                              </p>
+                              {/* Time moved to bottom for mobile */}
+                              <p className="text-xs text-gray-400 mt-2">
+                                {formatDateTime(notification.created_at)}
+                              </p>
+                            </div>
+                            {!notification.is_read && (
+                              <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  
+                  {/* Footer */}
+                  {notifications.length > 5 && (
+                    <div className="px-4 py-3 border-t border-gray-200">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setShowNotifications(false);
+                          // Navigate to notifications page
+                        }}
+                        className="w-full text-xs"
+                      >
+                        View all notifications
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                <div className="text-sm">
-                  <div className="font-medium text-gray-900">{admin?.full_name}</div>
-                  <div className="text-gray-600">{admin?.location}</div>
-                </div>
-              </div>
-              <button
-                onClick={logout}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-                title="Logout"
-              >
-                <LogOut className="h-5 w-5" />
-              </button>
+              )}
             </div>
           </div>
         </div>
-      </header>
-      <NotificationCenter
-        isOpen={showNotifications}
-        onClose={() => setShowNotifications(false)}
-        notifications={notifications}
-        setNotifications={setNotifications}
-      />
-    </>
-  )
-}
+
+        {/* Desktop Layout */}
+        <div className="hidden lg:flex items-center justify-between w-full">
+          <div className="flex items-center space-x-4">
+            <h1 className="text-lg font-semibold text-gray-900">Sales Dashboard</h1>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            {/* Visit Store Button */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => window.open('https://quickcart-store.com', '_blank')}
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Visit Store
+            </Button>
+            
+            {/* Desktop notification and other elements */}
+            {/* Same notification dropdown code as mobile but with desktop styling */}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};

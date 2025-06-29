@@ -55,52 +55,134 @@ export const NotificationsPage: React.FC = () => {
 
     return (
         <>
-            <div className="p-6 space-y-6">
-                <div className="flex items-center justify-between">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+                {/* Header - Remove Add Notification button */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-                            <Bell className="h-8 w-8 text-quickcart-600 mr-3" />
-                            All Notifications
+                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+                            <Bell className="h-6 w-6 sm:h-8 sm:w-8 text-quickcart-600 mr-2 sm:mr-3" />
+                            Notifications
                         </h1>
-                        <p className="text-gray-600 mt-1">View and manage all your system notifications.</p>
+                        <p className="text-sm sm:text-base text-gray-600 mt-1">Manage system notifications and alerts</p>
                     </div>
-                    <div className="flex items-center space-x-2">
-                        <Button variant="outline" onClick={handleMarkAllAsRead} disabled={isProcessing || !notifications.some(n => !n.is_read)}>
-                            <Check className="h-4 w-4 mr-2" /> Mark All as Read
-                        </Button>
-                        <Button variant="destructive" onClick={() => setShowClearConfirm(true)} disabled={isProcessing || notifications.length === 0}>
-                            <Trash2 className="h-4 w-4 mr-2" /> Clear All
-                        </Button>
+                    {/* Action buttons */}
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        {notifications.some(n => !n.is_read) && (
+                            <Button 
+                                onClick={handleMarkAllAsRead} 
+                                disabled={isProcessing}
+                                className="w-full sm:w-auto"
+                                variant="outline"
+                            >
+                                <Check className="h-4 w-4 mr-2" />
+                                Mark All Read
+                            </Button>
+                        )}
+                        {notifications.length > 0 && (
+                            <Button 
+                                onClick={() => setShowClearConfirm(true)} 
+                                disabled={isProcessing}
+                                className="w-full sm:w-auto"
+                                variant="outline"
+                            >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Clear All
+                            </Button>
+                        )}
                     </div>
                 </div>
 
+                {/* Notifications List */}
                 <Card>
                     <CardContent className="p-0">
                         <div className="divide-y divide-gray-200">
-                            {loadingNotifications ? <p className="p-6">Loading...</p> :
-                                notifications.length === 0 ? <p className="p-6 text-center text-gray-500">You have no notifications.</p> :
-                                    notifications.map(notification => (
-                                        <div key={notification.id} className={`p-4 flex items-start justify-between ${!notification.is_read ? 'bg-blue-50' : 'bg-white'}`}>
-                                            <div>
-                                                <div className="flex items-center gap-4 mb-1">
-                                                    <h3 className={`font-medium ${!notification.is_read ? 'text-gray-900' : 'text-gray-600'}`}>{notification.title}</h3>
-                                                    <Badge variant={notification.is_read ? "default" : "info"}>{notification.is_read ? "Read" : "Unread"}</Badge>
-                                                </div>
-                                                <p className="text-sm text-gray-600">{notification.message}</p>
-                                                <p className="text-xs text-gray-400 mt-2">{formatDateTime(notification.created_at)}</p>
+                            {loadingNotifications ? (
+                                <div className="p-6 text-center">Loading...</div>
+                            ) : notifications.length === 0 ? (
+                                <div className="p-6 text-center text-gray-500">You have no notifications.</div>
+                            ) : (
+                                notifications.map(notification => (
+                                    <div key={notification.id} className={`p-4 ${!notification.is_read ? 'bg-blue-50' : 'bg-white'}`}>
+                                        {/* Mobile Layout */}
+                                        <div className="block sm:hidden">
+                                            <div className="flex items-start justify-between mb-2">
+                                                <h3 className={`font-medium pr-2 ${!notification.is_read ? 'text-gray-900' : 'text-gray-600'}`}>
+                                                    {notification.title}
+                                                </h3>
+                                                <Badge variant={notification.is_read ? "default" : "info"} className="flex-shrink-0">
+                                                    {notification.is_read ? "Read" : "Unread"}
+                                                </Badge>
                                             </div>
-                                            <div className="flex items-center space-x-2">
+                                            <p className="text-sm text-gray-600 mb-3">{notification.message}</p>
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex flex-wrap gap-2">
+                                                    {!notification.is_read && (
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            onClick={() => handleMarkAsRead(notification.id)}
+                                                            className="flex-1 min-w-0"
+                                                        >
+                                                            <Check className="h-4 w-4 mr-1" />
+                                                            Mark Read
+                                                        </Button>
+                                                    )}
+                                                    {notification.related_error_id && (
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline" 
+                                                            onClick={() => handleViewSource(notification)}
+                                                            className="flex-1 min-w-0"
+                                                        >
+                                                            <Eye className="h-4 w-4 mr-1" />
+                                                            View
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-400">{formatDateTime(notification.created_at)}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Desktop Layout */}
+                                        <div className="hidden sm:flex items-start justify-between">
+                                            <div className="flex-1 min-w-0 pr-4">
+                                                <div className="flex items-center gap-3 mb-1">
+                                                    <h3 className={`font-medium ${!notification.is_read ? 'text-gray-900' : 'text-gray-600'}`}>
+                                                        {notification.title}
+                                                    </h3>
+                                                    <Badge variant={notification.is_read ? "default" : "info"}>
+                                                        {notification.is_read ? "Read" : "Unread"}
+                                                    </Badge>
+                                                </div>
+                                                <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
+                                                <p className="text-xs text-gray-400">{formatDateTime(notification.created_at)}</p>
+                                            </div>
+                                            <div className="flex items-center space-x-2 flex-shrink-0">
                                                 {!notification.is_read && (
-                                                    <Button size="sm" variant="outline" onClick={() => handleMarkAsRead(notification.id)}>Mark as Read</Button>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="outline" 
+                                                        onClick={() => handleMarkAsRead(notification.id)}
+                                                    >
+                                                        <Check className="h-4 w-4 mr-2" />
+                                                        Mark Read
+                                                    </Button>
                                                 )}
                                                 {notification.related_error_id && (
-                                                    <Button size="sm" variant="outline" onClick={() => handleViewSource(notification)}>
-                                                        <Eye className="h-4 w-4 mr-2" /> View Source
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="outline" 
+                                                        onClick={() => handleViewSource(notification)}
+                                                    >
+                                                        <Eye className="h-4 w-4 mr-2" />
+                                                        View Source
                                                     </Button>
                                                 )}
                                             </div>
                                         </div>
-                                    ))}
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </CardContent>
                 </Card>
