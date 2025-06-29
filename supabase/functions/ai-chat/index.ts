@@ -103,16 +103,39 @@ Deno.serve(async (req) => {
 
   try {
     console.log("Received request:", req.method, req.url);
-    const { query } = await req.json();
+    
+    // Check for required environment variables
+    const supabaseDbUrl = Deno.env.get("SUPABASE_DB_URL");
+    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+    
+    if (!supabaseDbUrl) {
+      throw new Error("SUPABASE_DB_URL environment variable is not set");
+    }
+    
+    if (!geminiApiKey) {
+      throw new Error("GEMINI_API_KEY environment variable is not set");
+    }
+    
+    const { query, history } = await req.json();
     if (!query) throw new Error("query is required");
     console.log("User query:", query);
+    console.log("Chat history length:", history ? history.length : 0);
 
     // Initialize clients
     console.log("Initializing database and AI clients...");
-    const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!);
-    const genAI = new GoogleGenerativeAI(Deno.env.get("GEMINI_API_KEY")!);
+    const sql = postgres(supabaseDbUrl);
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro", systemInstruction: SYSTEM_PROMPT });
-    const chat = model.startChat();
+    
+    // Initialize chat with history if provided
+    let chat;
+    if (history && history.length > 0) {
+      chat = model.startChat({
+        history: history
+      });
+    } else {
+      chat = model.startChat();
+    }
     console.log("Clients initialized successfully.");
 
     // First, ask the model if this is a guidance query or a data query based on the system prompt.
@@ -124,6 +147,7 @@ Deno.serve(async (req) => {
     const guidanceKeywords = ["go to the", "on the page", "you can manage", "navigate to", "you should be able to"];
     if (guidanceKeywords.some(keyword => firstPassText.toLowerCase().includes(keyword))) {
         console.log("Providing guidance directly:", firstPassText);
+        await sql.end();
         return new Response(JSON.stringify({ response: firstPassText }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 200,
@@ -156,6 +180,7 @@ Deno.serve(async (req) => {
     // Security check
     if (!generatedSql.toLowerCase().startsWith('select')) {
       console.log("Blocking non-SELECT query:", generatedSql);
+      await sql.end();
       return new Response(JSON.stringify({ response: "I'm sorry, I can only perform read-only queries." }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
@@ -163,8 +188,18 @@ Deno.serve(async (req) => {
     }
 
     console.log("Executing SQL:", generatedSql);
-    const data = await sql.unsafe(generatedSql);
-    console.log("SQL execution complete. Data retrieved:", data);
+    let data;
+    try {
+      data = await sql.unsafe(generatedSql);
+      console.log("SQL execution complete. Data retrieved:", data);
+    } catch (sqlError) {
+      console.error("SQL execution error:", sqlError);
+      await sql.end();
+      return new Response(JSON.stringify({ response: "I'm sorry, there was an error executing the database query. Please try rephrasing your question." }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
 
     // Final step: Formulate answer based on data
     const finalPrompt = `
@@ -185,6 +220,9 @@ Deno.serve(async (req) => {
     const finalResult = await chat.sendMessage(finalPrompt);
     const finalResponse = finalResult.response.text();
 
+    // Close database connection
+    await sql.end();
+
     return new Response(JSON.stringify({ response: finalResponse }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
@@ -192,6 +230,8 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error in function:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace available');
+    
     const message = error instanceof Error ? error.message : String(error);
     return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
