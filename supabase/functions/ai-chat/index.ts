@@ -1,4 +1,5 @@
 import { corsHeaders } from '../_shared/cors.ts';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Main function to serve requests
 Deno.serve(async (req) => {
@@ -17,21 +18,37 @@ Deno.serve(async (req) => {
     console.log("SUPABASE_DB_URL exists:", !!supabaseDbUrl);
     console.log("GEMINI_API_KEY exists:", !!geminiApiKey);
     
-    if (!supabaseDbUrl) {
-      throw new Error("SUPABASE_DB_URL environment variable is not set");
-    }
-    
     if (!geminiApiKey) {
       throw new Error("GEMINI_API_KEY environment variable is not set");
     }
     
-    const { query } = await req.json();
+    const { query, history } = await req.json();
     if (!query) throw new Error("query is required");
     console.log("User query:", query);
+    console.log("Chat history length:", history ? history.length : 0);
 
-    // Simple response for now
+    // Initialize AI client
+    console.log("Initializing AI client...");
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    
+    // Initialize chat with history if provided
+    let chat;
+    if (history && history.length > 0) {
+      chat = model.startChat({
+        history: history
+      });
+    } else {
+      chat = model.startChat();
+    }
+    console.log("AI client initialized successfully.");
+
+    // Get AI response
+    const response = await chat.sendMessage(query);
+    const aiResponse = response.response.text();
+
     return new Response(JSON.stringify({ 
-      response: `Hello! You asked: "${query}". This is a test response to debug the function.` 
+      response: aiResponse
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
@@ -44,7 +61,7 @@ Deno.serve(async (req) => {
     const message = error instanceof Error ? error.message : String(error);
     return new Response(JSON.stringify({ 
       error: message,
-      details: "Function is in debug mode"
+      details: "Function is testing AI integration"
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
