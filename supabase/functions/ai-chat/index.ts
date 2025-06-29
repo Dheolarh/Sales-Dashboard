@@ -63,7 +63,7 @@ async function getDbSchema(sql: postgres.Sql): Promise<string> {
 
 const SYSTEM_PROMPT = `
 You are Insight, a highly intelligent and helpful AI assistant for the QuickCart sales dashboard.
-Your goal is to assist users by either guiding them on how to use the web application or by answering their data-related questions.
+Your goal is to assist users by either guiding them on how to use the web application or by answering their data-related querys.
 
 You must follow these instructions in order of priority:
 
@@ -85,13 +85,13 @@ You must follow these instructions in order of priority:
     - User: "I need to change the price of the Sony Headphones."
     - Your Correct Response: "You can edit all product details, including the price, on the 'Products' page. From there, you can search for the Sony headphones and update its information."
 
-2.  **Database Queries (For Read-Only Questions):**
-    If the user asks a "what", "how many", "who", or "list" question that requires **reading or analyzing existing data**, you should generate a PostgreSQL query to find the answer.
+2.  **Database Queries (For Read-Only querys):**
+    If the user asks a "what", "how many", "who", or "list" query that requires **reading or analyzing existing data**, you should generate a PostgreSQL query to find the answer.
     - Example: "What was our total revenue last month?" or "How many Coca-Colas do we have in stock?"
     - You are strictly forbidden from generating any query that is not a 'SELECT' statement. If you are asked to modify data, follow the guidance in step 1.
 
 3.  **General Conversation:**
-    If the question is not related to the dashboard or its data, you can answer from your general knowledge, always maintaining your helpful assistant persona.
+    If the query is not related to the dashboard or its data, you can answer from your general knowledge, always maintaining your helpful assistant persona.
 `;
 
 // Main function to serve requests
@@ -102,9 +102,9 @@ Deno.serve(async (req) => {
 
   try {
     console.log("Received request:", req.method, req.url);
-    const { question } = await req.json();
-    if (!question) throw new Error("Question is required");
-    console.log("User question:", question);
+    const { query } = await req.json();
+    if (!query) throw new Error("query is required");
+    console.log("User query:", query);
 
     // Initialize clients
     console.log("Initializing database and AI clients...");
@@ -114,8 +114,8 @@ Deno.serve(async (req) => {
     const chat = model.startChat();
     console.log("Clients initialized successfully.");
 
-    // First, ask the model if this is a guidance question or a data question based on the system prompt.
-    const initialResponse = await chat.sendMessage(question);
+    // First, ask the model if this is a guidance query or a data query based on the system prompt.
+    const initialResponse = await chat.sendMessage(query);
     const firstPassText = initialResponse.response.text();
     
     // Simple check: If the response sounds like guidance (telling the user where to go),
@@ -130,18 +130,18 @@ Deno.serve(async (req) => {
     }
 
     // If it's not guidance, proceed to generate SQL
-    console.log("User question appears to be data-related. Generating SQL...");
+    console.log("User query appears to be data-related. Generating SQL...");
     const dbSchema = await getDbSchema(sql);
 
     const sqlPrompt = `
-      Based on the previous instruction and the user's question, and given the database schema below, write a single, valid PostgreSQL SELECT query to answer the question.
+      Based on the previous instruction and the user's query, and given the database schema below, write a single, valid PostgreSQL SELECT query to answer the query.
       Your response must be ONLY the raw SQL query, with no explanation, no markdown, and no surrounding text.
 
       --- Schema ---
       ${dbSchema}
       ---
 
-      Question: "${question}"
+      query: "${query}"
 
       SQL Query:
     `;
@@ -167,11 +167,11 @@ Deno.serve(async (req) => {
 
     // Final step: Formulate answer based on data
     const finalPrompt = `
-      Based on the following data, please formulate a clear and concise answer to the user's original question.
+      Based on the following data, please formulate a clear and concise answer to the user's original query.
       If the data is empty or an array with no items, inform the user that no results were found.
       Present the answer in a friendly and direct way.
 
-      Original Question: "${question}"
+      Original query: "${query}"
 
       --- Data ---
       ${JSON.stringify(data, null, 2)}
