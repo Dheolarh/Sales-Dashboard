@@ -129,10 +129,14 @@ Deno.serve(async (req) => {
         });
     }
 
-    // If not guidance and we have database URL, try database query
-    if (supabaseDbUrl && firstPassText.toLowerCase().includes('select')) {
+    // Check if this is a data query by looking at the user's question
+    const dataQueryKeywords = ["what", "how many", "how much", "list", "show me", "count", "total", "sum", "revenue", "sales", "products", "top selling", "best selling", "stock", "inventory"];
+    const isDataQuery = dataQueryKeywords.some(keyword => query.toLowerCase().includes(keyword));
+    
+    // If it's a data query and we have database URL, try database query
+    if (isDataQuery && supabaseDbUrl) {
       try {
-        console.log("Attempting database query...");
+        console.log("Attempting database query for:", query);
         const sql = postgres(supabaseDbUrl);
         const dbSchema = await getDbSchema(sql);
 
@@ -172,6 +176,8 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
           });
+        } else {
+          console.log("Generated SQL doesn't start with SELECT:", generatedSql);
         }
         
         await sql.end();
