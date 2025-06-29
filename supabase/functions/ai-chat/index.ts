@@ -2,144 +2,124 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import postgres from "postgres";
 
-// --- NEW KEYWORD-DRIVEN SQL QUERY MAP ---
-// This map connects user-friendly keywords to specific SQL queries.
-const KEYWORD_SQL_MAP = new Map<string[], string>([
-  [['total products', 'how many products'], 'SELECT COUNT(*) as count FROM products WHERE is_active = true'],
-  [['products in stock', 'show stock'], 'SELECT name, current_stock FROM products WHERE current_stock > 0 AND is_active = true ORDER BY current_stock DESC LIMIT 15'],
-  [['out of stock', 'zero stock'], 'SELECT name, sku FROM products WHERE current_stock = 0 AND is_active = true'],
-  [['low stock', 'low inventory'], 'SELECT name, current_stock FROM products WHERE current_stock > 0 AND current_stock <= 50 AND is_active = true ORDER BY current_stock ASC'],
-  [['top products', 'best selling'], 'SELECT p.name, SUM(t.quantity) as total_sold, SUM(t.total_amount) as revenue FROM products p JOIN transactions t ON p.id = t.product_id WHERE t.status = \'completed\' GROUP BY p.id, p.name ORDER BY revenue DESC LIMIT 10'],
-  
-  [['total revenue', 'all time revenue'], 'SELECT SUM(total_amount) as revenue FROM transactions WHERE status = \'completed\''],
-  [['revenue today', 'sales today'], 'SELECT SUM(total_amount) as revenue FROM transactions WHERE DATE(transaction_time) = CURRENT_DATE AND status = \'completed\''],
-  [['revenue this week', 'sales this week'], 'SELECT SUM(total_amount) as revenue FROM transactions WHERE transaction_time >= DATE_TRUNC(\'week\', CURRENT_DATE) AND status = \'completed\''],
-  [['revenue this month', 'sales this month'], 'SELECT SUM(total_amount) as revenue FROM transactions WHERE transaction_time >= DATE_TRUNC(\'month\', CURRENT_DATE) AND status = \'completed\''],
-  [['sales by category', 'revenue by category'], 'SELECT c.name, SUM(t.total_amount) as revenue FROM transactions t JOIN products p ON t.product_id = p.id JOIN categories c ON p.category_id = c.id WHERE t.status = \'completed\' GROUP BY c.name ORDER BY revenue DESC'],
-  
-  [['all companies', 'list companies'], 'SELECT name, country FROM companies ORDER BY name'],
-  [['all categories', 'list categories'], 'SELECT name, description FROM categories ORDER BY name'],
-  [['products by company', 'company products'], 'SELECT c.name as company, COUNT(p.id) as product_count FROM companies c JOIN products p ON c.id = p.company_id GROUP BY c.id, c.name ORDER BY product_count DESC'],
+// --- THE COMPLETE & FINAL KEYWORD MAP ---
+// Combines the original comprehensive list with regex for flexibility.
+const KEYWORD_SQL_MAP = new Map<RegExp, () => string>([
+    // Product Queries
+    [/total\sproducts|how\smany\sproducts/i, () => 'SELECT COUNT(*) as count FROM products WHERE is_active = true'],
+    [/products\sin\sstock|show\sstock/i, () => 'SELECT name, current_stock FROM products WHERE current_stock > 0 AND is_active = true ORDER BY current_stock DESC LIMIT 15'],
+    [/out\sof\sstock|zero\sstock/i, () => 'SELECT name, sku FROM products WHERE current_stock = 0 AND is_active = true'],
+    [/low\sstock|low\sinventory/i, () => 'SELECT name, current_stock FROM products WHERE current_stock > 0 AND current_stock <= 50 AND is_active = true ORDER BY current_stock ASC'],
+    [/top\sproducts|best\sselling/i, () => 'SELECT p.name, SUM(t.quantity) as total_sold, SUM(t.total_amount) as revenue FROM products p JOIN transactions t ON p.id = t.product_id WHERE t.status = \'completed\' GROUP BY p.id, p.name ORDER BY revenue DESC LIMIT 10'],
+    
+    // Revenue & Sales Queries (non-specific dates)
+    [/total\srevenue|all\stime\srevenue/i, () => 'SELECT SUM(total_amount) as revenue FROM transactions WHERE status = \'completed\''],
+    [/revenue\stoday|sales\stoday/i, () => 'SELECT SUM(total_amount) as revenue FROM transactions WHERE DATE(transaction_time) = CURRENT_DATE AND status = \'completed\''],
+    [/revenue\sthis\sweek|sales\sthis\sweek/i, () => 'SELECT SUM(total_amount) as revenue FROM transactions WHERE transaction_time >= DATE_TRUNC(\'week\', CURRENT_DATE) AND status = \'completed\''],
+    [/revenue\sthis\smonth|sales\sthis\smonth/i, () => 'SELECT SUM(total_amount) as revenue FROM transactions WHERE transaction_time >= DATE_TRUNC(\'month\', CURRENT_DATE) AND status = \'completed\''],
+    [/sales\sby\scategory|revenue\sby\scategory/i, () => 'SELECT c.name, SUM(t.total_amount) as revenue FROM transactions t JOIN products p ON t.product_id = p.id JOIN categories c ON p.category_id = c.id WHERE t.status = \'completed\' GROUP BY c.name ORDER BY revenue DESC'],
 
-  [['recent transactions', 'latest sales'], 'SELECT t.transaction_id, p.name as product, t.quantity, t.total_amount, t.transaction_time FROM transactions t JOIN products p ON t.product_id = p.id ORDER BY t.transaction_time DESC LIMIT 10'],
-  [['total transactions', 'how many sales'], 'SELECT COUNT(*) as count FROM transactions WHERE status = \'completed\''],
-  [['transactions today', 'number of sales today'], 'SELECT COUNT(*) as count FROM transactions WHERE DATE(transaction_time) = CURRENT_DATE AND status = \'completed\''],
+    // Company & Category Queries
+    [/all\scompanies|list\scompanies/i, () => 'SELECT name, country FROM companies ORDER BY name'],
+    [/all\scategories|list\scategories/i, () => 'SELECT name, description FROM categories ORDER BY name'],
+    [/products\sby\scompany|company\sproducts/i, () => 'SELECT c.name as company, COUNT(p.id) as product_count FROM companies c JOIN products p ON c.id = p.company_id GROUP BY c.id, c.name ORDER BY product_count DESC'],
 
-  [['total admins', 'how many admins'], 'SELECT COUNT(*) as count FROM admins WHERE is_active = true'],
-  [['recent logins', 'who logged in'], 'SELECT username, last_login, location FROM admins WHERE last_login IS NOT NULL ORDER BY last_login DESC LIMIT 5'],
-  [['access logs', 'login history'], 'SELECT email, login_time, location, success FROM access_logs ORDER BY login_time DESC LIMIT 15'],
-  
-  [['unresolved errors', 'open errors'], 'SELECT error_type, description, severity, created_at FROM error_logs WHERE resolved = false ORDER BY created_at DESC'],
-  [['recent errors', 'latest errors'], 'SELECT error_type, description, severity, created_at FROM error_logs ORDER BY created_at DESC LIMIT 5'],
-  [['unread notifications', 'new notifications'], 'SELECT title, message, created_at FROM notifications WHERE is_read = false ORDER BY created_at DESC']
+    // Transaction Queries
+    [/recent\stransactions|latest\ssales/i, () => 'SELECT t.transaction_id, p.name as product, t.quantity, t.total_amount, t.transaction_time FROM transactions t JOIN products p ON t.product_id = p.id ORDER BY t.transaction_time DESC LIMIT 10'],
+    [/total\stransactions|how\smany\ssales/i, () => 'SELECT COUNT(*) as count FROM transactions WHERE status = \'completed\''],
+    [/transactions\stoday|number\sof\ssales\stoday/i, () => 'SELECT COUNT(*) as count FROM transactions WHERE DATE(transaction_time) = CURRENT_DATE AND status = \'completed\''],
+
+    // Admin & Access Queries
+    [/total\sadmins|how\smany\sadmins/i, () => 'SELECT COUNT(*) as count FROM admins WHERE is_active = true'],
+    [/recent\slogins|who\slogged\sin/i, () => 'SELECT username, last_login, location FROM admins WHERE last_login IS NOT NULL ORDER BY last_login DESC LIMIT 5'],
+    [/access\slogs|login\shistory/i, () => 'SELECT email, login_time, location, success FROM access_logs ORDER BY login_time DESC LIMIT 15'],
+    
+    // Error & Notification Queries
+    [/unresolved\serrors|open\serrors/i, () => 'SELECT error_type, description, severity, created_at FROM error_logs WHERE resolved = false ORDER BY created_at DESC'],
+    [/recent\serrors|latest\serrors/i, () => 'SELECT error_type, description, severity, created_at FROM error_logs ORDER BY created_at DESC LIMIT 5'],
+    [/unread\snotifications|new\snotifications/i, () => 'SELECT title, message, created_at FROM notifications WHERE is_read = false ORDER BY created_at DESC']
 ]);
 
-// --- NEW FUNCTION TO FIND A MATCHING SQL QUERY ---
-function findMatchingSQL(userQuery: string): string | null {
-  const query = userQuery.toLowerCase().trim();
-  for (const [keywords, sql] of KEYWORD_SQL_MAP.entries()) {
-    if (keywords.some(keyword => query.includes(keyword))) {
-      return sql;
+function generateKeywordSQL(userQuery: string): string | null {
+    const query = userQuery.toLowerCase().trim();
+    for (const [regex, sqlGenerator] of KEYWORD_SQL_MAP.entries()) {
+        if (regex.test(query)) {
+            return sqlGenerator();
+        }
     }
-  }
-  return null;
+    return null;
 }
-
-// --- NEW LIST OF POTENTIAL DATABASE-RELATED TERMS ---
-// Used to provide helpful suggestions to the user.
-const DATABASE_HINTS = [
-  'sale', 'sales', 'revenue', 'product', 'stock', 'inventory', 'transaction', 
-  'company', 'category', 'admin', 'user', 'login', 'error', 'profit', 'cost'
-];
 
 // --- MAIN REQUEST HANDLER ---
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-  try {
-    const { query, history } = await req.json();
-    if (!query) throw new Error("query is required");
+    try {
+        const { query, history } = await req.json();
+        const supabaseDbUrl = Deno.env.get("SUPABASE_DB_URL");
+        const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
 
-    const supabaseDbUrl = Deno.env.get("SUPABASE_DB_URL");
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+        if (!query || !geminiApiKey || !supabaseDbUrl) throw new Error("Missing query or environment variables.");
 
-    if (!geminiApiKey || !supabaseDbUrl) {
-      throw new Error("Missing environment variables: GEMINI_API_KEY or SUPABASE_DB_URL");
-    }
-
-    // --- 1. KEYWORD-BASED DATABASE QUERY ---
-    const matchingSQL = findMatchingSQL(query);
-
-    if (matchingSQL) {
-      console.log("Found matching SQL for query:", query, "->", matchingSQL);
-      let sql;
-      try {
-        sql = postgres(supabaseDbUrl);
-        const data = await sql.unsafe(matchingSQL);
-        await sql.end();
-
-        if (!data || (Array.isArray(data) && data.length === 0)) {
-          return new Response(JSON.stringify({ response: "I ran the query, but no data was found for your request." }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200,
-          });
-        }
-        
-        // Use Gemini to format the data into a friendly response
         const genAI = new GoogleGenerativeAI(geminiApiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-        const formatPrompt = `The user asked: "${query}". The database returned this data: ${JSON.stringify(data, null, 2)}. Please provide a clear, friendly summary of this data.`;
-        const result = await model.generateContent(formatPrompt);
+        let sqlQuery: string | null = null;
+
+        // --- STEP 1: AI-POWERED DATE PARSING for complex date queries ---
+        const dateHintRegex = /(\d{1,4}[-/]\d{1,2}[-/]\d{1,4})|(\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|yesterday|last week|last month|quarter|st|nd|rd|th)\b)/i;
+        if (dateHintRegex.test(query.toLowerCase())) {
+            console.log("Date hint found, attempting AI date parsing for query:", query);
+            const dateParsingPrompt = `Today's date is ${new Date().toISOString().split('T')[0]}. Analyze the user's query: "${query}". Extract a start date and an end date. If it's a single day, start and end dates are the same. For ranges (like weeks, months, quarters), calculate the correct start and end. Respond ONLY with a valid JSON object like {"startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD"}. If no specific date is found, respond with {"startDate": null, "endDate": null}.`;
+            const dateResult = await model.generateContent(dateParsingPrompt);
+            try {
+                const { startDate, endDate } = JSON.parse(dateResult.response.text().trim());
+                if (startDate && endDate) {
+                    console.log(`AI parsed dates: startDate=${startDate}, endDate=${endDate}`);
+                    const metric = query.toLowerCase().includes('how many') ? 'COUNT(*)' : 'SUM(total_amount)';
+                    sqlQuery = `SELECT ${metric} as result FROM transactions WHERE status = 'completed' AND transaction_time >= '${startDate} 00:00:00' AND transaction_time <= '${endDate} 23:59:59'`;
+                }
+            } catch (e) {
+                console.error("AI date parsing failed, will proceed to keyword matching. Error:", e);
+            }
+        }
         
-        return new Response(JSON.stringify({ response: result.response.text() }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
-        });
+        // --- STEP 2: COMPREHENSIVE KEYWORD MATCHING (if no date query was built) ---
+        if (!sqlQuery) {
+            sqlQuery = generateKeywordSQL(query);
+        }
 
-      } catch (sqlError) {
-        if (sql) await sql.end();
-        console.error("SQL execution error:", sqlError);
-        return new Response(JSON.stringify({ response: `Sorry, I encountered a database error: ${sqlError.message}.` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500,
-        });
-      }
+        // --- STEP 3: EXECUTE SQL or FALLBACK to CONVERSATION ---
+        if (sqlQuery) {
+             console.log(`Executing SQL: ${sqlQuery}`);
+             let sql;
+             try {
+                sql = postgres(supabaseDbUrl);
+                const data = await sql.unsafe(sqlQuery);
+                await sql.end();
+                const formatPrompt = `The user asked: "${query}". The database returned this JSON data: ${JSON.stringify(data, null, 2)}. Provide a clear, friendly, and direct summary of this data. Format tables and numbers nicely using markdown. Start with the direct answer.`;
+                const result = await model.generateContent(formatPrompt);
+                return new Response(JSON.stringify({ response: result.response.text() }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
+             } catch (sqlError) {
+                if (sql) await sql.end();
+                console.error("SQL Execution Error:", sqlError);
+                const errorMessage = sqlError instanceof Error ? sqlError.message : String(sqlError);
+                const errorPrompt = `I am a chatbot. When trying to answer the user's question "${query}", I ran an SQL query but it failed with this error: "${errorMessage}". Explain this error to a non-technical user in a simple, friendly way and apologize. Do not suggest code solutions or show them the SQL.`;
+                const result = await model.generateContent(errorPrompt);
+                return new Response(JSON.stringify({ response: result.response.text() }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
+             }
+        } else {
+            // --- STEP 4: CONVERSATIONAL FALLBACK ---
+            console.log("No SQL match found, falling back to conversational model.");
+            const fallbackModel = genAI.getGenerativeModel({ 
+                model: "gemini-1.5-pro",
+                systemInstruction: "You are Stella, a helpful AI assistant for a business dashboard. If you cannot answer a question directly, guide the user on how to rephrase it or refer them to the correct page on the dashboard (e.g., [Products Page](/products))."
+            });
+            const chat = fallbackModel.startChat({ history });
+            const result = await chat.sendMessage(query);
+            return new Response(JSON.stringify({ response: result.response.text() }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
+        }
+    } catch (error) {
+        console.error('Critical Error in AI chat function:', error);
+        return new Response(JSON.stringify({ error: "A critical error occurred. Please check the function logs." }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 });
     }
-
-    // --- 2. CONVERSATIONAL FALLBACK & HINTS ---
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro",
-      systemInstruction: `You are Stella, a helpful AI assistant for the QuickCart sales dashboard. 
-      - Your primary role is to answer questions based on a database.
-      - If a user asks how to do something you cannot do (like add, edit, or delete data), you MUST refer them to the correct page on the dashboard. For example, to add a product, you should say "You can add new products on the [Products page](/products)."
-      - For general conversation, be friendly and helpful.
-      - Do not invent data or make up answers about database contents. If you don't know, say you don't know.`
-    });
-
-    const chat = model.startChat({ history });
-    const result = await chat.sendMessage(query);
-    let aiResponse = result.response.text();
-
-    // --- Add helpful hint if the query seems database-related but didn't match a keyword ---
-    const seemsDatabaseRelated = DATABASE_HINTS.some(hint => query.toLowerCase().includes(hint));
-    if (seemsDatabaseRelated) {
-      aiResponse += `\n\n*P.S. If you were trying to query the database, try using specific keywords. You can see a list of available keywords in the chat interface.*`;
-    }
-
-    return new Response(JSON.stringify({ response: aiResponse }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    });
-
-  } catch (error) {
-    console.error('Error in AI chat function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    });
-  }
 });
