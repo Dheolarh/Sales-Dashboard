@@ -163,28 +163,55 @@ Deno.serve(async (req) => {
         
         if (generatedSql.toLowerCase().startsWith('select')) {
           console.log("Executing SQL query...");
-          const data = await sql.unsafe(generatedSql);
-          console.log("SQL execution successful, data length:", Array.isArray(data) ? data.length : 'not array');
-          
-          // Format the response with data
-          const finalPrompt = `
-            Based on this data, provide a clear answer to: "${query}"
+          try {
+            const data = await sql.unsafe(generatedSql);
+            console.log("SQL execution successful, data:", data);
+            console.log("Data type:", typeof data);
+            console.log("Data length:", Array.isArray(data) ? data.length : 'not array');
             
-            Data: ${JSON.stringify(data, null, 2)}
+            // Check if we got any data
+            if (!data || (Array.isArray(data) && data.length === 0)) {
+              await sql.end();
+              return new Response(JSON.stringify({ 
+                response: `I executed the query successfully, but no data was found. The query was: ${generatedSql}` 
+              }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+              });
+            }
             
-            Answer:
-          `;
-          
-          console.log("Generating final response...");
-          const finalResult = await chat.sendMessage(finalPrompt);
-          const finalResponse = finalResult.response.text();
-          console.log("Final response generated successfully");
-          
-          await sql.end();
-          return new Response(JSON.stringify({ response: finalResponse }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200,
-          });
+            // Format the response with data
+            const finalPrompt = `
+              Based on this data, provide a clear answer to: "${query}"
+              
+              Data: ${JSON.stringify(data, null, 2)}
+              
+              Answer:
+            `;
+            
+            console.log("Generating final response...");
+            const finalResult = await chat.sendMessage(finalPrompt);
+            const finalResponse = finalResult.response.text();
+            console.log("Final response generated successfully");
+            
+            await sql.end();
+            return new Response(JSON.stringify({ response: finalResponse }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 200,
+            });
+            
+          } catch (sqlExecutionError) {
+            console.error("SQL execution failed:", sqlExecutionError);
+            console.error("SQL that failed:", generatedSql);
+            await sql.end();
+            const errorMessage = sqlExecutionError instanceof Error ? sqlExecutionError.message : String(sqlExecutionError);
+            return new Response(JSON.stringify({ 
+              response: `I tried to run this query: "${generatedSql}" but got an error: ${errorMessage}. This might mean the table or column doesn't exist in the database.` 
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 200,
+            });
+          }
         } else {
           console.log("Generated SQL doesn't start with SELECT:", generatedSql);
           await sql.end();
