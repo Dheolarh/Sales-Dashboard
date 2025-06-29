@@ -14,11 +14,21 @@ const QUICK_ACTIONS = [
   "Revenue by product category"
 ];
 
+const KEYWORD_CATEGORIES = {
+    "Products": ["product name", "product sku", "product stock", "total products", "products in stock", "out of stock", "low stock", "top products"],
+    "Sales & Revenue": ["total revenue", "revenue today", "revenue this week", "revenue this month", "sales by category"],
+    "Companies & Categories": ["all companies", "all categories", "products by company"],
+    "Transactions": ["recent transactions", "total transactions", "transactions today"],
+    "Admin & Access": ["total admins", "recent logins", "access logs"],
+    "Errors & Notifications": ["unresolved errors", "recent errors", "unread notifications"],
+};
+
 export const ChatPage: React.FC = () => {
   const { admin } = useAuthContext();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showKeywords, setShowKeywords] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -46,8 +56,8 @@ export const ChatPage: React.FC = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke('ai-chat', {
-        body: { 
-          query, 
+        body: {
+          query,
           history: messages.map(m => ({
             role: m.role === 'assistant' ? 'model' : 'user',
             parts: [{ text: m.content }]
@@ -101,7 +111,7 @@ export const ChatPage: React.FC = () => {
     const sections: string[] = message.content.split(/(🔍 |📊 |💻 |🧠 )/g).filter(Boolean) as string[];
     let currentSection = '';
     const output: string[] = [];
-    
+
     for (const section of sections) {
       if (['🔍', '📊', '💻', '🧠'].includes(section.trim())) {
         if (currentSection) {
@@ -111,10 +121,10 @@ export const ChatPage: React.FC = () => {
       }
       currentSection += section;
     }
-    
+
     // Add last section
     if (currentSection) output.push(currentSection);
-    
+
     return (
       <div>
         {output.map((section, index) => {
@@ -122,14 +132,14 @@ export const ChatPage: React.FC = () => {
           const content = section.replace(/^(🔍 |📊 |💻 |🧠 )/, '');
           const sectionId = `${message.id}-${index}`;
           const isExpanded = expandedItems.has(sectionId);
-          
+
           return (
             <div key={index} className="mb-3">
               {type === 'text' ? (
                 <ReactMarkdown className="prose max-w-none">{section}</ReactMarkdown>
               ) : (
                 <>
-                  <div 
+                  <div
                     className="flex items-center cursor-pointer font-medium text-gray-700"
                     onClick={() => toggleExpand(sectionId)}
                   >
@@ -143,11 +153,11 @@ export const ChatPage: React.FC = () => {
                     {type === '📊' && 'Results'}
                     {type === '💻' && 'SQL'}
                     {type === '🧠' && 'Mapping'}
-                    <ChevronDown 
-                      className={`h-4 w-4 ml-2 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                    <ChevronDown
+                      className={`h-4 w-4 ml-2 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                     />
                   </div>
-                  
+
                   {isExpanded && (
                     <div className="mt-2 ml-6">
                       {type === '📊' ? (
@@ -212,11 +222,11 @@ export const ChatPage: React.FC = () => {
                       <Sparkles className="h-4 w-4" />
                     </div>
                   )}
-                  
+
                   <div className={`p-4 rounded-lg max-w-full ${message.role === 'user' ? 'bg-quickcart-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
                     {renderMessageContent(message)}
                   </div>
-                  
+
                   {message.role === 'user' && (
                     <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-quickcart-600 text-white">
                       <User className="h-4 w-4" />
@@ -224,7 +234,7 @@ export const ChatPage: React.FC = () => {
                   )}
                 </div>
               ))}
-              
+
               {isLoading && (
                 <div className="flex items-start gap-3 max-w-3xl justify-start">
                   <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white">
@@ -250,10 +260,10 @@ export const ChatPage: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {QUICK_ACTIONS.map(q => (
-                    <Button 
-                      key={q} 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      key={q}
+                      size="sm"
+                      variant="outline"
                       className="text-left whitespace-normal h-auto py-2"
                       onClick={() => handleSendMessage(q)}
                     >
@@ -265,6 +275,30 @@ export const ChatPage: React.FC = () => {
             )}
 
             <div className="border-t border-gray-200 p-4 bg-white">
+               <div className="mb-2">
+                <button
+                  onClick={() => setShowKeywords(!showKeywords)}
+                  className="flex items-center text-sm font-medium text-gray-600 hover:text-gray-900"
+                >
+                  <ChevronDown className={`h-4 w-4 mr-1 transition-transform ${showKeywords ? 'rotate-180' : ''}`} />
+                  Show/Hide Keywords
+                </button>
+                {showKeywords && (
+                  <div className="mt-2 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-semibold mb-2">Available Keywords:</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {Object.entries(KEYWORD_CATEGORIES).map(([category, keywords]) => (
+                        <div key={category}>
+                          <h5 className="font-medium text-sm mb-1">{category}</h5>
+                          <ul className="list-disc list-inside text-sm text-gray-700">
+                            {keywords.map(keyword => <li key={keyword}>{keyword}</li>)}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center space-x-3">
                 <Input
                   value={inputValue}
