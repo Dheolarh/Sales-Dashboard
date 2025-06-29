@@ -51,8 +51,9 @@ async function getDbSchema(sql: postgres.Sql): Promise<string> {
     const tableCommentResult = await sql`
         SELECT obj_description(${tableName}::regclass, 'pg_class') as comment;
     `;
-    // THIS IS THE CORRECTED LINE
-    if (tableCommentResult[0] && tableCommentResult[0].comment) {
+    
+    // CORRECTED AND MORE ROBUST CHECK
+    if (tableCommentResult && tableCommentResult.length > 0 && tableCommentResult[0].comment) {
         schema += `  -- Table Comment: ${tableCommentResult[0].comment}\n`;
     }
 
