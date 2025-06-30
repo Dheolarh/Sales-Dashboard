@@ -24,48 +24,49 @@ export const NotificationsPage: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
 
     const handleMarkAsRead = async (id: string) => {
-      if (!admin) return;
-      
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-      
-      try {
+    if (!admin) return;
+    
+    try {
         await dbService.markNotificationAsRead(admin.id, id);
-      } catch (error) {
+        // Refresh notifications after update
+        await loadNotifications();
+    } catch (error) {
         console.error('Failed to mark notification as read:', error);
-      }
+    }
     };
 
     const handleMarkAllAsRead = async () => {
-      if (!admin) return;
-      
-      setIsProcessing(true);
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-      
-      try {
-        await dbService.markAllNotificationsAsRead(admin.id);
-      } catch (error) {
-        console.error('Failed to mark all notifications as read:', error);
-      }
-      
-      setIsProcessing(false);
+        if (!admin) return;
+        
+        setIsProcessing(true);
+        try {
+            await dbService.markAllNotificationsAsRead(admin.id);
+            // Refresh notifications after update
+            await loadNotifications();
+        } catch (error) {
+            console.error('Failed to mark all notifications as read:', error);
+        }
+        
+        setIsProcessing(false);
     };
 
     const handleClearAll = async () => {
-      setIsProcessing(true);
-      if (!admin) {
+        setIsProcessing(true);
+        if (!admin) {
+            setIsProcessing(false);
+            return;
+        }
+        
+        try {
+            await dbService.clearNotificationsForUser(admin.id);
+            // Clear local state instead of reloading
+            setNotifications([]);
+        } catch (error) {
+            console.error('Failed to clear notifications:', error);
+        }
+        
+        setShowClearConfirm(false);
         setIsProcessing(false);
-        return;
-      }
-      
-      try {
-        await dbService.clearNotificationsForUser(admin.id);
-        await loadNotifications(); // Reload to get updated state
-      } catch (error) {
-        console.error('Failed to clear notifications:', error);
-      }
-      
-      setShowClearConfirm(false);
-      setIsProcessing(false);
     };
 
     const handleViewSource = (notification: Notification) => {

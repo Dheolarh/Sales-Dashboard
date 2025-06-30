@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, X, CheckCircle, Info, Clock, Trash2, Eye } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import { supabase } from '../../lib/supabase';
+import { dbService } from '../../lib/supabase';
 import { formatDateTime } from '../../utils/format';
 import type { Notification } from '../../lib/supabase';
 import { useAuthContext } from '../../hooks/AuthContext';
@@ -27,35 +27,29 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
-  const handleMarkAsRead = async (notificationId: string) => {
-    if (!admin) return;
-    
-    // Optimistically update the UI
-    setNotifications(prev =>
-      prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
-    );
-    
-    try {
-      await supabase.markNotificationAsRead(notificationId, admin.id);
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
-      // Revert optimistic update on error
-      setNotifications(prev =>
-        prev.map(n => n.id === notificationId ? { ...n, is_read: false } : n)
-      );
-    }
-  };
-
   const handleMarkAllAsRead = async () => {
     if (!admin) return;
     
-    // Optimistically update UI
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-    
     try {
-      await supabase.markAllNotificationsAsRead(admin.id);
+      await dbService.markAllNotificationsAsRead(admin.id);
+      // Refresh notifications after update
+      const updated = await dbService.getNotifications(admin.id);
+      setNotifications(updated);
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
+    }
+  };
+
+  const handleMarkAsRead = async (notificationId: string) => {
+    if (!admin) return;
+    
+    try {
+      await dbService.markNotificationAsRead(notificationId, admin.id);
+      // Refresh notifications after update
+      const updated = await dbService.getNotifications(admin.id);
+      setNotifications(updated);
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
     }
   };
 
@@ -67,15 +61,14 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     }
     
     try {
-      await supabase.clearNotificationsForUser(admin.id);
-      // Remove notifications from UI for this user
-      setNotifications([]);
+      await dbService.clearNotificationsForUser(admin.id);
+      setNotifications([]); // Clear local state
     } catch (error) {
       console.error('Failed to clear notifications:', error);
-    } finally {
-      setIsClearing(false);
-      setShowClearConfirm(false);
     }
+    
+    setIsClearing(false);
+    setShowClearConfirm(false);
   };
 
   const handleViewAll = () => {

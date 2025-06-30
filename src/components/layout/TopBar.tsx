@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, User, LogOut, Globe, ExternalLink, Settings } from 'lucide-react';
+import { Bell, User, LogOut, Globe, ExternalLink, Settings, Menu, ShoppingCart, BarChart3 } from 'lucide-react';
 import { useAuthContext } from '../../hooks/AuthContext';
 import { NotificationCenter } from '../notifications/NotificationCenter';
 import { Badge } from '../ui/Badge';
 import type { Notification } from '../../lib/supabase';
 import { useSettingsContext } from '../../hooks/SettingsContext';
 import { Button } from '../ui/Button';
-import { dbService } from '../../lib/supabase'; // Changed from supabaseClient
+import { dbService as supabase } from '../../lib/supabase';
 
 // Defines the props the component now receives from DashboardLayout
 interface TopBarProps {
@@ -19,6 +19,7 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications 
   const { admin, logout } = useAuthContext();
   const { preferences } = useSettingsContext();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   React.useEffect(() => {
@@ -39,7 +40,7 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications 
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     
     try {
-      await dbService.markAllNotificationsAsRead(admin.id);
+      await supabase.markAllNotificationsAsRead(admin.id);
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
       // Revert optimistic update on error
@@ -58,7 +59,7 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications 
       ));
       
       try {
-        await dbService.markNotificationAsRead(notification.id, admin.id);
+        await supabase.markNotificationAsRead(notification.id, admin.id);
       } catch (error) {
         console.error('Failed to mark notification as read:', error);
         // Revert optimistic update on error
@@ -75,29 +76,36 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications 
 
   return (
     <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3">
-      <div className="flex items-center justify-between">
-        {/* Mobile: Only notification bell */}
+      <div className="flex items-center justify-between h-10">
+        {/* Mobile Layout */}
         <div className="flex lg:hidden items-center justify-between w-full">
-          <div></div> {/* Empty spacer */}
-          <div className="flex items-center space-x-4">
-            {/* Visit Store Button - Mobile Center */}
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => window.open('/store', '_blank')}
-              className="hidden sm:flex"
+          {/* Left: Hamburger Menu - Fixed vertical alignment */}
+          <div className="flex items-center">
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md flex items-center justify-center"
             >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Visit Store
-            </Button>
-            
-            {/* Notification Bell */}
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Center: Logo */}
+          <div className="flex items-center space-x-2 absolute left-1/2 transform -translate-x-1/2">
+            <div className="relative">
+              <ShoppingCart className="h-6 w-6 text-quickcart-600" />
+              <BarChart3 className="h-3 w-3 text-quickcart-500 absolute -top-1 -right-1" />
+            </div>
+            <span className="text-lg font-bold text-quickcart-700">QuickCart</span>
+          </div>
+
+          {/* Right: Notifications */}
+          <div className="flex items-center">
             <div className="relative">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="relative"
+                className="relative p-2"
               >
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
@@ -148,7 +156,6 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications 
                               <p className="text-xs text-gray-500 mt-1 truncate">
                                 {notification.message}
                               </p>
-                              {/* Time moved to bottom for mobile */}
                               <p className="text-xs text-gray-400 mt-2">
                                 {formatDateTime(notification.created_at)}
                               </p>
@@ -183,6 +190,14 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications 
         {/* Desktop Layout */}
         <div className="hidden lg:flex items-center justify-between w-full">
           <div className="flex items-center space-x-4">
+            {/* Desktop Logo */}
+            <div className="flex items-center space-x-2">
+              <div className="relative">
+                <ShoppingCart className="h-8 w-8 text-quickcart-600" />
+                <BarChart3 className="h-4 w-4 text-quickcart-500 absolute -top-1 -right-1" />
+              </div>
+              <span className="text-xl font-bold text-quickcart-700">QuickCart</span>
+            </div>
             <h1 className="text-lg font-semibold text-gray-900">Sales Dashboard</h1>
           </div>
           
@@ -191,7 +206,7 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications 
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => window.open('/store', '_blank')}
+              onClick={openStore}
             >
               <ExternalLink className="h-4 w-4 mr-2" />
               Visit Store
@@ -293,6 +308,48 @@ export const TopBar: React.FC<TopBarProps> = ({ notifications, setNotifications 
           </div>
         </div>
       </div>
+
+      {/* Mobile Menu Dropdown */}
+      {showMobileMenu && (
+        <>
+          {/* Backdrop */}
+          <div 
+            className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setShowMobileMenu(false)}
+          />
+          
+          {/* Menu */}
+          <div className="lg:hidden absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-lg z-50">
+            <div className="py-2 px-4 space-y-2">
+              {/* Visit Store Button in Mobile Menu */}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  openStore();
+                  setShowMobileMenu(false);
+                }}
+                className="w-full justify-start"
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Visit Store
+              </Button>
+              
+              {/* User Info */}
+              <div className="flex items-center justify-between py-2 border-t border-gray-200">
+                <div className="flex items-center space-x-2">
+                  <User className="h-4 w-4 text-gray-500" />
+                  <span className="text-sm text-gray-700">{admin?.username}</span>
+                </div>
+                <Button variant="ghost" size="sm" onClick={logout}>
+                  <LogOut className="h-4 w-4" />
+                  <span className="ml-2">Logout</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </header>
   );
 };

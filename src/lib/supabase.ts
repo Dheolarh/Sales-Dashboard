@@ -404,23 +404,14 @@ export const dbService = {
     if (error) throw error;
   },
 
-  // Add method to clear notifications for specific user (mark as deleted)
+  // Update clearNotificationsForUser function
   async clearNotificationsForUser(adminId: string) {
-    // Instead of deleting, we'll mark them as read and add a deleted flag
-    // or you can add a separate table for deleted notifications per user
-    const notifications = await this.getNotifications(adminId);
-    
-    const clearUpdates = notifications.map(notification => ({
-      notification_id: notification.id,
-      admin_id: adminId,
-      is_read: true,
-      read_at: new Date().toISOString()
-    }));
-    
+    // Delete all notifications for this user
     const { error } = await supabase
-      .from('notification_read_status')
-      .upsert(clearUpdates);
-    
+      .from('notifications')
+      .delete()
+      .eq('admin_id', adminId);
+
     if (error) throw error;
   },
 
