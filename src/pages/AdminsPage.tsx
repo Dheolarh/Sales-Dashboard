@@ -86,27 +86,33 @@ export const AdminsPage: React.FC = () => {
     return matchesSearch && matchesRole && matchesStatus
   })
 
+  // Update handleSubmit function
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     try {
+      // Prepare admin data for Supabase
+      const adminData = {
+        email: formData.email,
+        username: formData.username,
+        full_name: formData.full_name,
+        role: formData.role,
+        location: formData.location,
+        is_active: formData.is_active,
+        updated_at: new Date().toISOString()
+      }
+
       if (editingAdmin) {
-        // Update existing admin
         await supabase
           .from('admins')
-          .update({
-            ...formData,
-            updated_at: new Date().toISOString()
-          })
+          .update(adminData)
           .eq('id', editingAdmin.id)
       } else {
-        // Create new admin
         await supabase
           .from('admins')
           .insert({
-            ...formData,
+            ...adminData,
             created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
           })
       }
       

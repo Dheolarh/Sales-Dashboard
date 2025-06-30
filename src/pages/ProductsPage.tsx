@@ -64,7 +64,6 @@ export const ProductsPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    // *** NEW: Log page visit activity ***
     if (admin) {
       dbService.logActivity({
         admin_id: admin.id,
@@ -107,7 +106,6 @@ export const ProductsPage: React.FC = () => {
     return matchesSearch && matchesCategory && matchesCompany && matchesStatus;
   });
 
-  /* --- MODIFIED: handleSubmit now logs activity --- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!admin) {
@@ -116,26 +114,53 @@ export const ProductsPage: React.FC = () => {
     }
 
     try {
+      // Prepare the product data for insertion/update
+      const productData = {
+        name: formData.name,
+        sku: formData.sku,
+        company_id: formData.company_id,
+        category_id: formData.category_id,
+        cost_price: formData.cost_price,
+        selling_price: formData.selling_price,
+        current_stock: formData.current_stock,
+        description: formData.description,
+        image_url: formData.image_url,
+        is_active: formData.is_active,
+        updated_at: new Date().toISOString(),
+      };
+
       let savedProduct: Product | null = null;
       if (editingProduct) {
-        const { data, error } = await supabase.from('products').update({ ...formData, updated_at: new Date().toISOString() }).eq('id', editingProduct.id).select().single();
+        const { data, error } = await supabase
+          .from('products')
+          .update(productData)
+          .eq('id', editingProduct.id)
+          .select()
+          .single();
         if (error) throw error;
         savedProduct = data;
       } else {
-        const { data, error } = await supabase.from('products').insert({ ...formData, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }).select().single();
+        const { data, error } = await supabase
+          .from('products')
+          .insert({ 
+            ...productData, 
+            created_at: new Date().toISOString() 
+          })
+          .select()
+          .single();
         if (error) throw error;
         savedProduct = data;
       }
 
-      // *** NEW: Log this activity ***
-      if (savedProduct) {
+      // Log the activity
+      if (savedProduct && admin) {
         dbService.logActivity({
           admin_id: admin.id,
           action_type: editingProduct ? 'UPDATE_PRODUCT' : 'CREATE_PRODUCT',
           details: {
             productId: savedProduct.id,
-            productName: savedProduct.name
-          }
+            productName: savedProduct.name,
+          },
         });
       }
 
@@ -170,7 +195,7 @@ export const ProductsPage: React.FC = () => {
         reason: 'Manual stock addition by admin'
       });
 
-      // *** NEW: Log this as a general activity ***
+      // Log this as a general activity
       dbService.logActivity({
         admin_id: admin.id,
         action_type: 'UPDATE_STOCK',
@@ -210,7 +235,6 @@ export const ProductsPage: React.FC = () => {
   const handleDelete = async (productId: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
     try {
-      // *** NEW: Log activity before deleting ***
       const productToDelete = products.find(p => p.id === productId);
       if (admin && productToDelete) {
         dbService.logActivity({
@@ -232,7 +256,18 @@ export const ProductsPage: React.FC = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', sku: '', company_id: '', category_id: '', cost_price: 0, selling_price: 0, current_stock: 0, description: '', image_url: '', is_active: true });
+    setFormData({ 
+      name: '', 
+      sku: '', 
+      company_id: '', 
+      category_id: '', 
+      cost_price: 0, 
+      selling_price: 0, 
+      current_stock: 0, 
+      description: '', 
+      image_url: '', 
+      is_active: true 
+    });
     setEditingProduct(null);
     setShowAddModal(false);
   };

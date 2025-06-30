@@ -62,27 +62,30 @@ export const CompaniesPage: React.FC = () => {
     company.country.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  // Update handleSubmit function
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     try {
+      // Prepare the company data for Supabase
+      const companyData = {
+        name: formData.name,
+        country: formData.country,
+        contact_info: formData.contact_info, // Keep as JSON object
+        updated_at: new Date().toISOString()
+      }
+
       if (editingCompany) {
-        // Update existing company
         await supabase
           .from('companies')
-          .update({
-            ...formData,
-            updated_at: new Date().toISOString()
-          })
+          .update(companyData)
           .eq('id', editingCompany.id)
       } else {
-        // Create new company
         await supabase
           .from('companies')
           .insert({
-            ...formData,
+            ...companyData,
             created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
           })
       }
       

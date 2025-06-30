@@ -95,14 +95,26 @@ export const CategoriesPage: React.FC = () => {
   }, [searchTerm, categoryHierarchy]);
 
 
+  // Update handleSubmit function
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     try {
+      // Prepare category data for Supabase
+      const categoryData = {
+        name: formData.name,
+        description: formData.description,
+        parent_category_id: formData.parent_category_id || null,
+        updated_at: new Date().toISOString()
+      }
+
       if (editingCategory) {
-        await supabase.from('categories').update({ ...formData, updated_at: new Date().toISOString() }).eq('id', editingCategory.id)
+        await supabase.from('categories').update(categoryData).eq('id', editingCategory.id)
       } else {
-        await supabase.from('categories').insert({ ...formData, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        await supabase.from('categories').insert({
+          ...categoryData,
+          created_at: new Date().toISOString(),
+        })
       }
       await loadCategories()
       resetForm()
