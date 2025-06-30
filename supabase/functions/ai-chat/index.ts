@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import postgres from "postgres";
+import postgres, { Sql } from "postgres";
 
 // --- THE COMPLETE & FINAL KEYWORD MAP ---
 // Combines the original comprehensive list with regex for flexibility.
@@ -40,6 +40,44 @@ const KEYWORD_SQL_MAP = new Map<RegExp, () => string>([
     [/unread\snotifications|new\snotifications/i, () => 'SELECT title, message, created_at FROM notifications WHERE is_read = false ORDER BY created_at DESC']
 ]);
 
+/*
+ * @param sql - The PostgreSQL client instance.
+ * @param cart - An array of items in the shopping cart.
+ */
+// Define CartItem type if not already imported
+type CartItem = {
+  product: {
+    id: number;
+    selling_price: number;
+    // add other product fields if needed
+  };
+  quantity: number;
+  // add other cart item fields if needed
+};
+
+async function processCheckout(sql: Sql, cart: CartItem[]) {
+  // Using Promise.all to run database operations in parallel for efficiency
+  await Promise.all(cart.map(item => {
+    return Promise.all([
+      // Decrease stock
+      sql`SELECT decrease_stock(${item.product.id}, ${item.quantity})`,
+      // Create transaction record
+      sql`
+        INSERT INTO transactions (transaction_id, product_id, quantity, unit_price, total_amount, customer_location, status)
+        VALUES (
+          'TXN-' || substr(md5(random()::text), 0, 10),
+          ${item.product.id},
+          ${item.quantity},
+          ${item.product.selling_price},
+          ${item.product.selling_price * item.quantity},
+          'Unknown',
+          'completed'
+        )
+      `
+    ]);
+  }));
+}
+
 function generateKeywordSQL(userQuery: string): string | null {
     const query = userQuery.toLowerCase().trim();
     for (const [regex, sqlGenerator] of KEYWORD_SQL_MAP.entries()) {
@@ -55,11 +93,28 @@ Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
     try {
-        const { query, history } = await req.json();
+        const { query, history, cart, task } = await req.json(); // Added cart and task
         const supabaseDbUrl = Deno.env.get("SUPABASE_DB_URL");
         const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
 
-        if (!query || !geminiApiKey || !supabaseDbUrl) throw new Error("Missing query or environment variables.");
+        if (!supabaseDbUrl || !geminiApiKey) {
+          throw new Error("Missing environment variables.");
+        }
+
+        const sql = postgres(supabaseDbUrl);
+
+        if (task === 'process_checkout') {
+            if (!cart) throw new Error("Cart data is required for checkout.");
+            await processCheckout(sql, cart);
+            await sql.end();
+            return new Response(JSON.stringify({ success: true, message: "Checkout successful!" }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+            });
+        }
+
+
+        if (!query) throw new Error("Missing query.");
 
         const genAI = new GoogleGenerativeAI(geminiApiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
@@ -82,7 +137,7 @@ Deno.serve(async (req) => {
                 console.error("AI date parsing failed, will proceed to keyword matching. Error:", e);
             }
         }
-        
+
         // --- STEP 2: COMPREHENSIVE KEYWORD MATCHING (if no date query was built) ---
         if (!sqlQuery) {
             sqlQuery = generateKeywordSQL(query);
@@ -110,7 +165,7 @@ Deno.serve(async (req) => {
         } else {
             // --- STEP 4: CONVERSATIONAL FALLBACK ---
             console.log("No SQL match found, falling back to conversational model.");
-            const fallbackModel = genAI.getGenerativeModel({ 
+            const fallbackModel = genAI.getGenerativeModel({
                 model: "gemini-1.5-pro",
                 systemInstruction: "You are Stella, a helpful AI assistant for a business dashboard. If you cannot answer a question directly, guide the user on how to rephrase it or refer them to the correct page on the dashboard (e.g., [Products Page](/products))."
             });
