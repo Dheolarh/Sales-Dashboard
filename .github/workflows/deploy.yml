@@ -29,4 +29,4 @@ jobs:
 
       # This is the corrected deployment step
       - name: Deploy Edge Functions
-        run: supabase functions deploy --no-verify-jwt --import-map ./supabase/functions/import_map.json
+        run: supabase functions deploy --no-verify-jwt

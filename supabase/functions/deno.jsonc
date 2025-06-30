@@ -1,6 +1,0 @@
-{
-  "compilerOptions": {
-    "lib": ["deno.ns", "dom"]
-  },
-  "importMap": "./functions/import_map.json"
-}
