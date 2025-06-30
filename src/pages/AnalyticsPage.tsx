@@ -43,6 +43,18 @@ import { dbService } from '../lib/supabase'
 import { formatCurrency, formatDateTime } from '../utils/format'
 import type { Product, Transaction, Category, Company } from '../lib/supabase'
 
+// Colors for Pie chart slices
+const COLORS = [
+  '#2563eb', // blue
+  '#16a34a', // green
+  '#f59e42', // orange
+  '#a21caf', // purple
+  '#e11d48', // red
+  '#0ea5e9', // sky
+  '#fbbf24', // yellow
+  '#6366f1', // indigo
+]
+
 interface AnalyticsData {
   revenue: {
     total: number
@@ -75,8 +87,6 @@ interface DateRange {
   end: string
   label: string
 }
-
-const COLORS = ['#2563eb', '#16a34a', '#dc2626', '#ca8a04', '#9333ea', '#c2410c']
 
 export const AnalyticsPage: React.FC = () => {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
@@ -356,93 +366,99 @@ export const AnalyticsPage: React.FC = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+      {/* Header - Fix alignment */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <BarChart3 className="h-8 w-8 text-quickcart-600 mr-3" />
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+            <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-quickcart-600 mr-2 sm:mr-3" />
             Analytics & Reporting
           </h1>
-          <p className="text-gray-600 mt-1">Comprehensive business intelligence and performance insights</p>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">Comprehensive business intelligence and performance insights</p>
         </div>
-        <div className="flex items-center space-x-3">
-          <Button
-            onClick={refreshAnalytics}
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button 
+            onClick={refreshAnalytics} 
             disabled={refreshing}
+            className="w-full sm:w-auto"
             variant="outline"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          <Button onClick={exportReport}>
+          <Button 
+            onClick={exportReport}
+            className="w-full sm:w-auto"
+          >
             <Download className="h-4 w-4 mr-2" />
             Export Report
           </Button>
         </div>
       </div>
 
-      {/* Date Range Controls */}
+      {/* Date Range Filter - Fix alignment and functionality */}
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <Calendar className="h-4 w-4 text-gray-400" />
-                <span className="text-sm font-medium text-gray-700">Date Range:</span>
-                <span className="text-sm text-gray-900">{dateRange.label}</span>
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-5 w-5 text-gray-400" />
+              <span className="text-sm font-medium text-gray-700">Date Range:</span>
+            </div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 flex-1">
+              {/* Quick Date Range Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant={dateRange.label === 'Last 7 Days' ? 'primary' : 'outline'}
+                  onClick={() => setQuickDateRange(7, 'Last 7 Days')}
+                >
+                  7 Days
+                </Button>
+                <Button
+                  size="sm"
+                  variant={dateRange.label === 'Last 30 Days' ? 'primary' : 'outline'}
+                  onClick={() => setQuickDateRange(30, 'Last 30 Days')}
+                >
+                  30 Days
+                </Button>
+                <Button
+                  size="sm"
+                  variant={dateRange.label === 'Last 90 Days' ? 'primary' : 'outline'}
+                  onClick={() => setQuickDateRange(90, 'Last 90 Days')}
+                >
+                  90 Days
+                </Button>
               </div>
-              <div className="flex items-center space-x-2">
-                <Input
+              
+              {/* Custom Date Range */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+                <input
                   type="date"
                   value={dateRange.start}
-                  onChange={(e) => setDateRange({...dateRange, start: e.target.value, label: 'Custom'})}
-                  className="w-auto"
+                  onChange={(e) => setDateRange({...dateRange, start: e.target.value, label: 'Custom Range'})}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-quickcart-500 w-full sm:w-auto"
                 />
-                <span className="text-gray-500">to</span>
-                <Input
+                <span className="text-sm text-gray-600 hidden sm:inline">to</span>
+                <input
                   type="date"
                   value={dateRange.end}
-                  onChange={(e) => setDateRange({...dateRange, end: e.target.value, label: 'Custom'})}
-                  className="w-auto"
+                  onChange={(e) => setDateRange({...dateRange, end: e.target.value, label: 'Custom Range'})}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-quickcart-500 w-full sm:w-auto"
                 />
               </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setQuickDateRange(7, 'Last 7 Days')}
-              >
-                7D
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setQuickDateRange(30, 'Last 30 Days')}
-              >
-                30D
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setQuickDateRange(90, 'Last 90 Days')}
-              >
-                90D
-              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* KPI Cards - Fix responsive grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(analytics.revenue.total)}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Total Revenue</p>
+                <p className="text-lg sm:text-2xl font-bold text-gray-900">{formatCurrency(analytics.revenue.total)}</p>
                 <div className={`flex items-center mt-1 ${getTrendColor(analytics.revenue.trend)}`}>
                   {getTrendIcon(analytics.revenue.trend)}
                   <span className="text-sm ml-1">
@@ -450,59 +466,59 @@ export const AnalyticsPage: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <DollarSign className="h-8 w-8 text-green-600" />
+              <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Orders</p>
-                <p className="text-2xl font-bold text-gray-900">{analytics.customers.totalOrders.toLocaleString()}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Total Orders</p>
+                <p className="text-lg sm:text-2xl font-bold text-gray-900">{analytics.customers.totalOrders.toLocaleString()}</p>
                 <p className="text-sm text-gray-600 mt-1">
                   Avg: {formatCurrency(analytics.customers.averageOrderValue)}
                 </p>
               </div>
-              <ShoppingCart className="h-8 w-8 text-blue-600" />
+              <ShoppingCart className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Active Products</p>
-                <p className="text-2xl font-bold text-gray-900">{analytics.products.total}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Active Products</p>
+                <p className="text-lg sm:text-2xl font-bold text-gray-900">{analytics.products.total}</p>
                 <p className="text-sm text-red-600 mt-1">
                   {analytics.products.lowStock} low stock
                 </p>
               </div>
-              <Package className="h-8 w-8 text-purple-600" />
+              <Package className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Profit Margin</p>
-                <p className="text-2xl font-bold text-gray-900">{analytics.performance.profitMargin.toFixed(1)}%</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Profit Margin</p>
+                <p className="text-lg sm:text-2xl font-bold text-gray-900">{analytics.performance.profitMargin.toFixed(1)}%</p>
                 <p className="text-sm text-gray-600 mt-1">
                   Conversion: {analytics.performance.conversionRate}%
                 </p>
               </div>
-              <Target className="h-8 w-8 text-orange-600" />
+              <Target className="h-6 w-6 sm:h-8 sm:w-8 text-orange-600" />
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Revenue Trends */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -570,7 +586,7 @@ export const AnalyticsPage: React.FC = () => {
       </div>
 
       {/* Category Performance & Top Products */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -634,7 +650,7 @@ export const AnalyticsPage: React.FC = () => {
       </div>
 
       {/* Geographic Performance & Performance Metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -727,7 +743,7 @@ export const AnalyticsPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* Summary Insights */}
+      {/* Summary Insights - Fix duplicated content */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">

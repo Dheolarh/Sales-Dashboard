@@ -5,7 +5,7 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { supabase, type Notification } from '../lib/supabase';
+import { dbService, type Notification } from '../lib/supabase';
 import { useAuthContext } from '../hooks/AuthContext';
 import { formatDateTime } from '../utils/format';
 
@@ -24,27 +24,48 @@ export const NotificationsPage: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
 
     const handleMarkAsRead = async (id: string) => {
-        setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-        await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+      if (!admin) return;
+      
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+      
+      try {
+        await dbService.markNotificationAsRead(admin.id, id);
+      } catch (error) {
+        console.error('Failed to mark notification as read:', error);
+      }
     };
 
     const handleMarkAllAsRead = async () => {
-        setIsProcessing(true);
-        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-        const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
-        if (unreadIds.length > 0) {
-            await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
-        }
-        setIsProcessing(false);
+      if (!admin) return;
+      
+      setIsProcessing(true);
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      
+      try {
+        await dbService.markAllNotificationsAsRead(admin.id);
+      } catch (error) {
+        console.error('Failed to mark all notifications as read:', error);
+      }
+      
+      setIsProcessing(false);
     };
 
     const handleClearAll = async () => {
-        setIsProcessing(true);
-        if (!admin) return;
-        await supabase.from('notifications').delete().eq('admin_id', admin.id);
-        await loadNotifications(); // Reload from the source
-        setShowClearConfirm(false);
+      setIsProcessing(true);
+      if (!admin) {
         setIsProcessing(false);
+        return;
+      }
+      
+      try {
+        await dbService.clearNotificationsForUser(admin.id);
+        await loadNotifications(); // Reload to get updated state
+      } catch (error) {
+        console.error('Failed to clear notifications:', error);
+      }
+      
+      setShowClearConfirm(false);
+      setIsProcessing(false);
     };
 
     const handleViewSource = (notification: Notification) => {

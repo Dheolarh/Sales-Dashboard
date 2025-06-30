@@ -30,7 +30,7 @@ function App() {
       
       {/* 2. Add the floating image here */}
       <img
-        src="/assets/bolt.png"
+        src="/assets/bolt.jpg"
         alt="Floating Action"
         className="
           fixed

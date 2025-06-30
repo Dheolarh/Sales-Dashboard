@@ -7,36 +7,41 @@ import { Settings, User, Server } from 'lucide-react'
 export const SettingsPage: React.FC = () => {
   return (
     <div className="p-6">
-      <Tabs defaultValue="user" className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-              <Settings className="h-8 w-8 text-quickcart-600 mr-3" />
+      <div className="max-w-7xl mx-auto">
+        <Tabs defaultValue="user" className="space-y-6">
+          {/* Header */}
+          <div className="border-b border-gray-200 pb-4">
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center mb-2">
+              <Settings className="h-8 w-8 text-quickcart-600 mr-3 flex-shrink-0" />
               Settings
             </h1>
-            <p className="text-gray-600 mt-1">Manage your preferences and system configuration</p>
+            <p className="text-gray-600">Manage your preferences and system configuration</p>
           </div>
           
-          <TabsList>
-            <TabsTrigger value="user" className="flex items-center">
-              <User className="h-4 w-4 mr-2" />
-              User Preferences
+          {/* Tabs */}
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="user" className="flex items-center justify-center gap-2">
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">User Preferences</span>
+              <span className="sm:hidden">User</span>
             </TabsTrigger>
-            <TabsTrigger value="system" className="flex items-center">
-              <Server className="h-4 w-4 mr-2" />
-              System Settings
+            <TabsTrigger value="system" className="flex items-center justify-center gap-2">
+              <Server className="h-4 w-4" />
+              <span className="hidden sm:inline">System Settings</span>
+              <span className="sm:hidden">System</span>
             </TabsTrigger>
           </TabsList>
-        </div>
 
-        <TabsContent value="user">
-          <UserPreferences />
-        </TabsContent>
+          {/* Tab Content */}
+          <TabsContent value="user" className="space-y-6">
+            <UserPreferences />
+          </TabsContent>
 
-        <TabsContent value="system">
-          <SystemSettings />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="system" className="space-y-6">
+            <SystemSettings />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }

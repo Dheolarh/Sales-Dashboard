@@ -291,8 +291,8 @@ export const MonitorPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header - Fix alignment */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center">
             <Brain className="h-8 w-8 text-quickcart-600 mr-3" />
@@ -309,14 +309,14 @@ export const MonitorPage: React.FC = () => {
               onChange={(e) => setAutoScanEnabled(e.target.checked)}
               className="rounded border-gray-300 text-quickcart-600 focus:ring-quickcart-500"
             />
-            <label htmlFor="autoScan" className="text-sm text-gray-700">
+            <label htmlFor="autoScan" className="text-sm text-gray-700 whitespace-nowrap">
               Auto-scan
             </label>
           </div>
           <Button
             onClick={() => runAIScan()}
             disabled={isScanning}
-            className="flex items-center"
+            className="flex items-center whitespace-nowrap"
           >
             {isScanning ? (
               <>
@@ -333,18 +333,18 @@ export const MonitorPage: React.FC = () => {
         </div>
       </div>
 
-      {/* System Health Overview */}
+      {/* System Health Overview - Fix internal alignment */}
       <Card className="border-l-4 border-l-quickcart-600">
         <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
             <div className="flex items-center space-x-3">
-              <Shield className="h-8 w-8 text-quickcart-600" />
+              <Shield className="h-8 w-8 text-quickcart-600 flex-shrink-0" />
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">System Health</h3>
                 <p className="text-sm text-gray-600">Overall system performance and stability</p>
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-left sm:text-right">
               <div className="text-3xl font-bold text-quickcart-600">{stats.systemHealth}%</div>
               <div className={`text-sm font-medium ${
                 stats.systemHealth > 80 ? 'text-green-600' : 
@@ -368,17 +368,17 @@ export const MonitorPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Monitoring Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* Monitoring Stats - Fix card content alignment */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Scans</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-600 truncate">Total Scans</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.totalScans.toLocaleString()}</p>
                 <p className="text-xs text-gray-500 mt-1">AI monitoring cycles</p>
               </div>
-              <Activity className="h-8 w-8 text-blue-600" />
+              <Activity className="h-8 w-8 text-blue-600 flex-shrink-0 ml-4" />
             </div>
           </CardContent>
         </Card>
@@ -386,12 +386,12 @@ export const MonitorPage: React.FC = () => {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Anomalies Detected</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-600 truncate">Anomalies Detected</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.anomaliesDetected}</p>
                 <p className="text-xs text-gray-500 mt-1">Issues identified</p>
               </div>
-              <AlertTriangle className="h-8 w-8 text-orange-600" />
+              <AlertTriangle className="h-8 w-8 text-orange-600 flex-shrink-0 ml-4" />
             </div>
           </CardContent>
         </Card>
@@ -399,12 +399,12 @@ export const MonitorPage: React.FC = () => {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Resolved Issues</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-600 truncate">Resolved Issues</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.resolvedIssues}</p>
                 <p className="text-xs text-gray-500 mt-1">Successfully fixed</p>
               </div>
-              <CheckCircle className="h-8 w-8 text-green-600" />
+              <CheckCircle className="h-8 w-8 text-green-600 flex-shrink-0 ml-4" />
             </div>
           </CardContent>
         </Card>
@@ -412,18 +412,18 @@ export const MonitorPage: React.FC = () => {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Accuracy Rate</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-600 truncate">Accuracy Rate</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.accuracyRate.toFixed(1)}%</p>
                 <p className="text-xs text-gray-500 mt-1">AI precision</p>
               </div>
-              <Target className="h-8 w-8 text-purple-600" />
+              <Target className="h-8 w-8 text-purple-600 flex-shrink-0 ml-4" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* System Metrics */}
+      {/* System Metrics - Fix metric card alignment */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -432,31 +432,31 @@ export const MonitorPage: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {systemMetrics.map((metric, index) => {
               const TrendIcon = getTrendIcon(metric.trend)
               return (
                 <div key={index} className="bg-gray-50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-gray-900">{metric.name}</h4>
-                    <TrendIcon className={`h-4 w-4 ${
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-gray-900 text-sm leading-tight">{metric.name}</h4>
+                    <TrendIcon className={`h-4 w-4 flex-shrink-0 ${
                       metric.trend === 'up' ? 'text-green-600' : 
                       metric.trend === 'down' ? 'text-red-600' : 'text-gray-600'
                     }`} />
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-end justify-between mb-3">
                     <span className="text-2xl font-bold text-gray-900">{metric.value.toFixed(0)}%</span>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getMetricStatusColor(metric.status)}`}>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getMetricStatusColor(metric.status)}`}>
                       {metric.status.charAt(0).toUpperCase() + metric.status.slice(1)}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                  <div className="w-full bg-gray-200 rounded-full h-2">
                     <div 
                       className={`h-2 rounded-full transition-all duration-500 ${
                         metric.status === 'healthy' ? 'bg-green-500' : 
                         metric.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
                       }`}
-                      style={{ width: `${metric.value}%` }}
+                      style={{ width: `${Math.min(metric.value, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -493,10 +493,10 @@ export const MonitorPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Anomaly Alerts */}
+      {/* Anomaly Alerts - Fix alert card alignment */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <span className="flex items-center">
               <AlertTriangle className="h-5 w-5 mr-2" />
               Recent Anomaly Alerts
@@ -512,21 +512,21 @@ export const MonitorPage: React.FC = () => {
               const SeverityIcon = getSeverityIcon(alert.severity)
               return (
                 <div key={alert.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-3 flex-1">
-                      <SeverityIcon className={`h-5 w-5 mt-0.5 ${
+                  <div className="flex flex-col lg:flex-row items-start justify-between gap-4">
+                    <div className="flex items-start space-x-3 flex-1 min-w-0">
+                      <SeverityIcon className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
                         alert.severity === 'critical' ? 'text-red-600' : 
                         alert.severity === 'high' ? 'text-orange-600' : 
                         alert.severity === 'medium' ? 'text-yellow-600' : 'text-blue-600'
                       }`} />
                       
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
                           <h4 className="font-medium text-gray-900">{alert.title}</h4>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getSeverityColor(alert.severity)}`}>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getSeverityColor(alert.severity)}`}>
                             {alert.severity.toUpperCase()}
                           </span>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-gray-500 whitespace-nowrap">
                             {alert.confidence}% confidence
                           </span>
                         </div>
@@ -534,39 +534,39 @@ export const MonitorPage: React.FC = () => {
                         <p className="text-sm text-gray-600 mb-2">{alert.description}</p>
                         
                         {alert.product && (
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-gray-500 mb-2">
                             Product: <span className="font-medium">{alert.product.name}</span> (SKU: {alert.product.sku})
                           </p>
                         )}
                         
                         {alert.expectedValue && alert.actualValue && (
-                          <div className="flex items-center space-x-4 mt-2 text-sm">
-                            <span className="text-gray-600">
+                          <div className="flex flex-wrap items-center gap-4 mb-2 text-sm">
+                            <span className="text-gray-600 whitespace-nowrap">
                               Expected: <span className="font-medium">{formatCurrency(alert.expectedValue)}</span>
                             </span>
-                            <span className="text-gray-600">
+                            <span className="text-gray-600 whitespace-nowrap">
                               Actual: <span className="font-medium">{formatCurrency(alert.actualValue)}</span>
                             </span>
-                            <span className="text-red-600">
+                            <span className="text-red-600 whitespace-nowrap">
                               Difference: <span className="font-medium">{formatCurrency(Math.abs(alert.expectedValue - alert.actualValue))}</span>
                             </span>
                           </div>
                         )}
                         
-                        <p className="text-xs text-gray-400 mt-2">
+                        <p className="text-xs text-gray-400">
                           Detected: {formatDateTime(alert.timestamp)}
                         </p>
                       </div>
                     </div>
                     
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 flex-shrink-0">
                       {alert.resolved ? (
-                        <span className="flex items-center text-green-600 text-sm">
+                        <span className="flex items-center text-green-600 text-sm whitespace-nowrap">
                           <CheckCircle className="h-4 w-4 mr-1" />
                           Resolved
                         </span>
                       ) : (
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" className="whitespace-nowrap">
                           Investigate
                         </Button>
                       )}

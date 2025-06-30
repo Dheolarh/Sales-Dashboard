@@ -28,25 +28,32 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const [isClearing, setIsClearing] = useState(false);
 
   const handleMarkAsRead = async (notificationId: string) => {
-    // Optimistically update the UI for an instant "grayed out" effect
+    if (!admin) return;
+    
+    // Optimistically update the UI
     setNotifications(prev =>
       prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
     );
+    
     try {
-      await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId);
+      await supabase.markNotificationAsRead(notificationId, admin.id);
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
+      // Revert optimistic update on error
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, is_read: false } : n)
+      );
     }
   };
 
   const handleMarkAllAsRead = async () => {
+    if (!admin) return;
+    
     // Optimistically update UI
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    
     try {
-      const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
-      if (unreadIds.length > 0) {
-        await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
-      }
+      await supabase.markAllNotificationsAsRead(admin.id);
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
     }
@@ -57,12 +64,11 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     if (!admin) {
       setIsClearing(false);
       return;
-    };
+    }
+    
     try {
-      // For this action, we will delete all notifications for the logged-in admin
-      const { error } = await supabase.from('notifications').delete().eq('admin_id', admin.id);
-      if (error) throw error;
-      // After successful deletion, update the UI state to an empty array
+      await supabase.clearNotificationsForUser(admin.id);
+      // Remove notifications from UI for this user
       setNotifications([]);
     } catch (error) {
       console.error('Failed to clear notifications:', error);

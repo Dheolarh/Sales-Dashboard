@@ -317,23 +317,111 @@ export const dbService = {
 
   // Notifications
   async getNotifications(adminId?: string) {
-    let query = supabase
+    if (!adminId) {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select(`
+          *,
+          admin:admins(*),
+          related_error:error_logs(*)
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data as Notification[];
+    }
+
+    // Get notifications with read status for the specific user
+    const { data, error } = await supabase
       .from('notifications')
       .select(`
         *,
         admin:admins(*),
-        related_error:error_logs(*)
+        related_error:error_logs(*),
+        notification_read_status!left(is_read, read_at)
       `)
-      .order('created_at', { ascending: false })
+      .eq('notification_read_status.admin_id', adminId)
+      .or(`admin_id.eq.${adminId},admin_id.is.null`)
+      .order('created_at', { ascending: false });
 
-    if (adminId) {
-      query = query.or(`admin_id.eq.${adminId},admin_id.is.null`)
-    }
+    if (error) throw error;
+    
+    // Transform the data to include read status
+    return data?.map(notification => ({
+      ...notification,
+      is_read: notification.notification_read_status?.[0]?.is_read || false,
+      read_at: notification.notification_read_status?.[0]?.read_at || null
+    })) as Notification[];
+  },
 
-    const { data, error } = await query
+  // Add method to mark notification as read for specific user
+  async markNotificationAsRead(notificationId: string, adminId: string) {
+    const { error } = await supabase
+      .from('notification_read_status')
+      .upsert({
+        notification_id: notificationId,
+        admin_id: adminId,
+        is_read: true,
+        read_at: new Date().toISOString()
+      });
+    
+    if (error) throw error;
+  },
 
-    if (error) throw error
-    return data as Notification[]
+  // Add method to mark all notifications as read for specific user
+  async markAllNotificationsAsRead(adminId: string) {
+    // First get all notifications for this user that aren't already read
+    const { data: notifications, error: fetchError } = await supabase
+      .from('notifications')
+      .select(`
+        id,
+        notification_read_status!left(is_read)
+      `)
+      .eq('notification_read_status.admin_id', adminId)
+      .or(`admin_id.eq.${adminId},admin_id.is.null`);
+
+    if (fetchError) throw fetchError;
+
+    // Filter out already read notifications
+    const unreadNotifications = notifications?.filter(n => 
+      !n.notification_read_status?.[0]?.is_read
+    ) || [];
+
+    if (unreadNotifications.length === 0) return;
+
+    // Create read status entries for unread notifications
+    const readStatusUpdates = unreadNotifications.map(notification => ({
+      notification_id: notification.id,
+      admin_id: adminId,
+      is_read: true,
+      read_at: new Date().toISOString()
+    }));
+
+    const { error } = await supabase
+      .from('notification_read_status')
+      .upsert(readStatusUpdates);
+
+    if (error) throw error;
+  },
+
+  // Add method to clear notifications for specific user (mark as deleted)
+  async clearNotificationsForUser(adminId: string) {
+    // Instead of deleting, we'll mark them as read and add a deleted flag
+    // or you can add a separate table for deleted notifications per user
+    const notifications = await this.getNotifications(adminId);
+    
+    const clearUpdates = notifications.map(notification => ({
+      notification_id: notification.id,
+      admin_id: adminId,
+      is_read: true,
+      read_at: new Date().toISOString()
+    }));
+    
+    const { error } = await supabase
+      .from('notification_read_status')
+      .upsert(clearUpdates);
+    
+    if (error) throw error;
   },
 
   // Analytics
@@ -576,4 +664,121 @@ export const dbService = {
     return { success: true };
   },
 
+}
+
+export class SupabaseService {
+  // ...existing methods...
+
+  // Add this missing method
+  async clearNotificationsForUser(adminId: string) {
+    try {
+      // Get all notifications for this user
+      const notifications = await this.getNotifications(adminId);
+      
+      if (notifications.length === 0) return;
+
+      // Mark all notifications as read (this effectively "clears" them for the user)
+      const clearUpdates = notifications.map(notification => ({
+        notification_id: notification.id,
+        admin_id: adminId,
+        is_read: true,
+        read_at: new Date().toISOString()
+      }));
+
+      const { error } = await supabase
+        .from('notification_read_status')
+        .upsert(clearUpdates);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error clearing notifications for user:', error);
+      throw error;
+    }
+  }
+
+  // Also make sure you have these methods
+  async markNotificationAsRead(notificationId: string, adminId: string) {
+    try {
+      const { error } = await supabase
+        .from('notification_read_status')
+        .upsert({
+          notification_id: notificationId,
+          admin_id: adminId,
+          is_read: true,
+          read_at: new Date().toISOString()
+        });
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      throw error;
+    }
+  }
+
+  async markAllNotificationsAsRead(adminId: string) {
+    try {
+      // Get all unread notifications for this user
+      const notifications = await this.getNotifications(adminId);
+      const unreadNotifications = notifications.filter(n => !n.is_read);
+      
+      if (unreadNotifications.length === 0) return;
+
+      const readStatusUpdates = unreadNotifications.map(notification => ({
+        notification_id: notification.id,
+        admin_id: adminId,
+        is_read: true,
+        read_at: new Date().toISOString()
+      }));
+
+      const { error } = await supabase
+        .from('notification_read_status')
+        .upsert(readStatusUpdates);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      throw error;
+    }
+  }
+
+  // Update the existing getNotifications method to include read status
+  async getNotifications(adminId?: string) {
+    if (!adminId) {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select(`
+          *,
+          admin:admins(*),
+          related_error:error_logs(*)
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data as Notification[];
+    }
+
+    // Get notifications with read status for the specific user
+    const { data, error } = await supabase
+      .from('notifications')
+      .select(`
+        *,
+        admin:admins(*),
+        related_error:error_logs(*),
+        notification_read_status!left(is_read, read_at)
+      `)
+      .eq('notification_read_status.admin_id', adminId)
+      .or(`admin_id.eq.${adminId},admin_id.is.null`)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    
+    // Transform the data to include read status
+    return data?.map(notification => ({
+      ...notification,
+      is_read: notification.notification_read_status?.[0]?.is_read || false,
+      read_at: notification.notification_read_status?.[0]?.read_at || null
+    })) as Notification[];
+  }
+
+  // ...rest of existing methods...
 }

@@ -12,6 +12,8 @@ export const DashboardLayout: React.FC = () => {
 
   const loadNotifications = useCallback(async () => {
     if (!admin) return;
+    
+    setLoadingNotifications(true);
     try {
       const data = await dbService.getNotifications(admin.id);
       setNotifications(data);
