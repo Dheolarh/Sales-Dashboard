@@ -40,6 +40,7 @@ class IntentClassifier {
 class ConversationalResponder {
   private model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
 
+<<<<<<< HEAD
   async generateResponse(query: string, history: any[]): Promise<string> {
     const prompt = `
       You are Stella, a friendly and helpful AI business assistant.
@@ -130,6 +131,8 @@ class DynamicQueryEngine {
       Return ONLY the JSON object.
     `;
 
+=======
+>>>>>>> parent of 070ecd1 (Add product fix)
     try {
       const result = await this.model.generateContent(prompt);
       const responseTextCleaned = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
@@ -138,11 +141,15 @@ class DynamicQueryEngine {
       const thoughtProcess = responseJson.thought_process;
       const sql = (responseJson.sql || '').trim().replace(/;$/, '');
 
+<<<<<<< HEAD
       if (!sql) {
         return "I'm sorry, I was unable to construct a query for that request. Please try rephrasing.";
       }
 
       const { data: queryData, error: queryError } = await this.supabase.rpc('execute_sql', { query: sql });
+=======
+        const sql = postgres(supabaseDbUrl);
+>>>>>>> parent of 070ecd1 (Add product fix)
 
       let responseText = `🧠 **Thought Process:**\n${thoughtProcess}\n\n`;
       responseText += `💻 **Executed SQL:**\n\`\`\`sql\n${sql}\n\`\`\`\n\n`;

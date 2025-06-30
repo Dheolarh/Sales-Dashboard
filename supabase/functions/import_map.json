@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "../_shared/cors.ts": "./_shared/cors.ts",
+    "postgres": "https://esm.sh/postgres@3.4.4",
+    "@google/generative-ai": "https://esm.sh/@google/generative-ai@0.15.0"
+  }
+}
