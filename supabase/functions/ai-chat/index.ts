@@ -92,6 +92,8 @@ function generateKeywordSQL(userQuery: string): string | null {
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
+    let sql: Sql | null = null;
+
     try {
         const { query, history, cart, task } = await req.json(); // Added cart and task
         const supabaseDbUrl = Deno.env.get("SUPABASE_DB_URL");
@@ -101,7 +103,13 @@ Deno.serve(async (req) => {
           throw new Error("Missing environment variables.");
         }
 
-        const sql = postgres(supabaseDbUrl);
+        sql = postgres(supabaseDbUrl, {
+          // This configuration makes the library compatible with Deno's runtime
+          transform: {
+            undefined: null
+          }
+        });
+
 
         if (task === 'process_checkout') {
             if (!cart) throw new Error("Cart data is required for checkout.");
