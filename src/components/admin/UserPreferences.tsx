@@ -13,7 +13,7 @@ import {
   Save,
   RefreshCw
 } from 'lucide-react'
-import { useSettingsContext, UserPreferencesData } from '../../hooks/SettingsContext'; // --- MODIFIED ---
+import { useSettingsContext, UserPreferencesData } from '../../hooks/SettingsContext';
 import { useToast } from '../../hooks/useToast'
 
 interface UserPreferences {
@@ -121,7 +121,7 @@ export const UserPreferences: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center">
             <Settings className="h-8 w-8 text-quickcart-600 mr-3" />
@@ -129,12 +129,12 @@ export const UserPreferences: React.FC = () => {
           </h1>
           <p className="text-gray-600 mt-1">Customize your dashboard experience</p>
         </div>
-        <div className="flex items-center space-x-3">
-          <Button variant="outline" onClick={resetToDefaults}>
+        <div className="flex items-center space-x-3 w-full sm:w-auto">
+          <Button variant="outline" onClick={resetToDefaults} className="w-full sm:w-auto">
             <RefreshCw className="h-4 w-4 mr-2" />
-            Reset to Defaults
+            Reset
           </Button>
-          <Button onClick={savePreferences} disabled={saving}>
+          <Button onClick={savePreferences} disabled={saving} className="w-full sm:w-auto">
             <Save className="h-4 w-4 mr-2" />
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>

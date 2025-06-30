@@ -15,8 +15,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../hooks/useToast';
 import { StatusIndicator } from '../ui/StatusIndicator';
-import { dbService } from '../../lib/supabase'; // --- NEW ---
-import { LoadingSpinner } from '../ui/LoadingSpinner'; // --- NEW ---
+import { dbService } from '../../lib/supabase';
+import { LoadingSpinner } from '../ui/LoadingSpinner';
 
 interface SystemConfig {
   database: {
@@ -91,13 +91,12 @@ const defaultConfig: SystemConfig = {
 };
 
 export const SystemSettings: React.FC = () => {
-  const [loading, setLoading] = useState(true); // --- MODIFIED ---
+  const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<SystemConfig>(defaultConfig);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const { addToast } = useToast();
 
-  // --- NEW: useEffect to load settings from the database ---
   useEffect(() => {
     const loadSettings = async () => {
       setLoading(true);
@@ -129,7 +128,6 @@ export const SystemSettings: React.FC = () => {
     }));
   };
 
-  // --- MODIFIED: The saveConfig function now makes a real API call ---
   const saveConfig = async () => {
     setSaving(true);
     try {
@@ -162,7 +160,6 @@ export const SystemSettings: React.FC = () => {
     }
   };
 
-  // --- NEW: Loading state ---
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -174,7 +171,7 @@ export const SystemSettings: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center">
             <Settings className="h-8 w-8 text-quickcart-600 mr-3" />
@@ -182,7 +179,7 @@ export const SystemSettings: React.FC = () => {
           </h1>
           <p className="text-gray-600 mt-1">Configure system-wide settings and preferences</p>
         </div>
-        <Button onClick={saveConfig} disabled={saving}>
+        <Button onClick={saveConfig} disabled={saving} className="w-full sm:w-auto">
           <Save className="h-4 w-4 mr-2" />
           {saving ? 'Saving...' : 'Save All Changes'}
         </Button>

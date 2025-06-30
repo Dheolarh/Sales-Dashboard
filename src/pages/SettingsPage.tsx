@@ -19,13 +19,13 @@ export const SettingsPage: React.FC = () => {
           </div>
           
           {/* Tabs */}
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
-            <TabsTrigger value="user" className="flex items-center justify-center gap-2">
+          <TabsList className="flex flex-wrap h-auto w-full max-w-md">
+            <TabsTrigger value="user" className="flex-1 flex items-center justify-center gap-2">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">User Preferences</span>
               <span className="sm:hidden">User</span>
             </TabsTrigger>
-            <TabsTrigger value="system" className="flex items-center justify-center gap-2">
+            <TabsTrigger value="system" className="flex-1 flex items-center justify-center gap-2">
               <Server className="h-4 w-4" />
               <span className="hidden sm:inline">System Settings</span>
               <span className="sm:hidden">System</span>
