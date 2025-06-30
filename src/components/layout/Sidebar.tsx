@@ -18,6 +18,8 @@ import {
   X
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
+import { Button } from '../ui/Button'
+import { ExternalLink } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -95,6 +97,19 @@ export const Sidebar: React.FC = () => {
               </NavLink>
             ))}
           </nav>
+          
+          {/* Add Visit Store button for mobile view */}
+          <div className="px-4 py-2 border-t border-gray-200 lg:hidden">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open('/store', '_blank')}
+              className="w-full justify-start"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Visit Store
+            </Button>
+          </div>
           
           <div className="p-4 border-t border-gray-200">
             <div className="text-xs text-gray-500 text-center">
